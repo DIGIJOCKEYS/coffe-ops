@@ -80,3 +80,16 @@
     @apply bg-background text-foreground;
   }
 }
+
+@media print {
+  [data-sidebar],
+  [data-navbar] {
+    display: none !important;
+  }
+  [data-main-wrapper] {
+    padding-left: 0 !important;
+  }
+  body {
+    background: #ffffff !important;
+  }
+}

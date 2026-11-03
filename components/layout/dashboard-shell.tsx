@@ -5,7 +5,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Toaster } from '@/components/ui/toaster';
 import { Navbar } from '@/components/layout/navbar';
 import { RoleGuard } from '@/components/layout/role-guard';
-import { RoleProvider } from '@/components/layout/role-context';
+import { AuthProvider } from '@/components/layout/role-context';
 import { SidebarNav } from '@/components/layout/sidebar';
 import { cn } from '@/lib/utils';
 
@@ -14,9 +14,10 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <RoleProvider>
+    <AuthProvider>
       <div className="min-h-screen bg-background">
         <aside
+          data-sidebar
           className={cn(
             'fixed inset-y-0 left-0 z-30 hidden border-r border-line bg-white transition-[width] duration-300 ease-out lg:block',
             collapsed ? 'w-[76px]' : 'w-64',
@@ -36,6 +37,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         </Sheet>
 
         <div
+          data-main-wrapper
           className={cn(
             'flex min-h-screen flex-col transition-[padding] duration-300 ease-out',
             collapsed ? 'lg:pl-[76px]' : 'lg:pl-64',
@@ -50,6 +52,6 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         </div>
       </div>
       <Toaster />
-    </RoleProvider>
+    </AuthProvider>
   );
 }

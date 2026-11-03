@@ -1,5 +1,4 @@
 import {
-  ArrowDownToLine,
   ArrowUpFromLine,
   ClipboardCheck,
   FileBarChart,
@@ -8,7 +7,6 @@ import {
   ScrollText,
   Settings,
   ShoppingBag,
-  UtensilsCrossed,
   Users,
   Wallet,
   type LucideIcon,
@@ -39,11 +37,9 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Operasional',
     items: [
-      { href: '/ingredients', label: 'Persediaan Bahan Baku', icon: Package, roles: ALL_ROLES },
-      { href: '/receipts', label: 'Penerimaan Stok', icon: ArrowDownToLine, roles: ALL_ROLES },
-      { href: '/issues', label: 'Penggunaan Stok', icon: ArrowUpFromLine, roles: ALL_ROLES },
+      { href: '/stock', label: 'Stok & Menu', icon: Package, roles: ALL_ROLES },
+      { href: '/stock-takes', label: 'Ambil Barang', icon: ArrowUpFromLine, roles: ALL_ROLES },
       { href: '/stock-opname', label: 'Stock Opname', icon: ClipboardCheck, roles: ALL_ROLES },
-      { href: '/menus', label: 'Menu & Resep', icon: UtensilsCrossed, roles: ALL_ROLES },
       { href: '/sales', label: 'Penjualan', icon: ShoppingBag, roles: ALL_ROLES },
       { href: '/expenses', label: 'Pengeluaran', icon: Wallet, roles: ALL_ROLES },
     ],

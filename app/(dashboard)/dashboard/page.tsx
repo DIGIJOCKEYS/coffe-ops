@@ -1,12 +1,12 @@
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
-import { ActivityCard, LowStockCard, RecentTransactionsCard, TopMenusCard } from '@/components/dashboard/dashboard-lists';
+import { ActivityCard, LowStockCard, ShiftSalesCard, TopMenusCard } from '@/components/dashboard/dashboard-lists';
 import { KpiCards } from '@/components/dashboard/kpi-cards';
 import { SalesCharts } from '@/components/dashboard/sales-charts';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
-import { estimateHppRatio, summarizeDay } from '@/lib/metrics';
-import { activities, dailySales, ingredients, menus, monthlySales, recentTransactions } from '@/lib/mock-data';
+import { omzetChange, summarizeToday } from '@/lib/metrics';
+import { auditEntries, dailySales, expenses, monthlySales, shiftSales, stockItems } from '@/lib/mock-data';
 
 const DAY_LABEL = new Intl.DateTimeFormat('id-ID', { weekday: 'short', timeZone: 'Asia/Jakarta' });
 const LONG_DATE = new Intl.DateTimeFormat('id-ID', {
@@ -17,16 +17,17 @@ const LONG_DATE = new Intl.DateTimeFormat('id-ID', {
   timeZone: 'Asia/Jakarta',
 });
 
+const TODAY = '2026-11-03';
+
 export default function DashboardPage() {
   const daily = dailySales.map((day) => ({
     ...day,
     label: DAY_LABEL.format(new Date(`${day.date}T12:00:00+07:00`)),
   }));
-  const today = daily[daily.length - 1];
-  const yesterday = daily[daily.length - 2];
+  const todaySales = shiftSales.filter((shift) => shift.date === TODAY);
   const summary = {
-    ...summarizeDay(today, estimateHppRatio(menus)),
-    omzetChange: ((today.omzet - yesterday.omzet) / yesterday.omzet) * 100,
+    ...summarizeToday(todaySales, stockItems, expenses),
+    omzetChange: omzetChange(daily),
   };
 
   return (
@@ -37,7 +38,7 @@ export default function DashboardPage() {
         actions={
           <>
             <Button variant="outline" asChild>
-              <Link href="/receipts">Penerimaan Stok</Link>
+              <Link href="/stock-takes">Ambil Barang</Link>
             </Button>
             <Button asChild>
               <Link href="/sales">
@@ -53,11 +54,11 @@ export default function DashboardPage() {
         <KpiCards summary={summary} />
         <SalesCharts daily={daily} monthly={monthlySales} />
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-          <TopMenusCard menus={menus} />
-          <LowStockCard ingredients={ingredients} />
-          <ActivityCard activities={activities} />
+          <TopMenusCard sales={todaySales} />
+          <LowStockCard items={stockItems} />
+          <ActivityCard entries={auditEntries} />
         </div>
-        <RecentTransactionsCard transactions={recentTransactions} />
+        <ShiftSalesCard sales={todaySales} />
       </div>
     </>
   );

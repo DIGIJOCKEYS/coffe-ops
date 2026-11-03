@@ -2,27 +2,29 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { Bell, LogOut, Menu, Settings, ShieldCheck, User } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { Bell, LogOut, Menu, User } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
-import { useRole } from '@/components/layout/role-context';
-import { findNavGroupTitle, findNavItem, type Role } from '@/lib/nav-config';
-import { currentUser, notifications as initialNotifications } from '@/lib/mock-data';
+import { useAuth } from '@/components/layout/role-context';
+import { findNavGroupTitle, findNavItem } from '@/lib/nav-config';
+import { notifications as initialNotifications } from '@/lib/mock-data';
 import { cn } from '@/lib/utils';
 
-const ROLE_OPTIONS: { value: Role; label: string }[] = [
-  { value: 'admin', label: 'Admin / Pemilik' },
-  { value: 'staff', label: 'Staff / Barista' },
-];
+function initialsOf(name: string, fallback: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return fallback.slice(0, 2).toUpperCase();
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
 
 export function Navbar({ onOpenMobileMenu }: { onOpenMobileMenu: () => void }) {
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-line bg-white/90 px-4 backdrop-blur supports-[backdrop-filter]:bg-white/75 sm:px-6">
+    <header data-navbar className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-line bg-white/90 px-4 backdrop-blur supports-[backdrop-filter]:bg-white/75 sm:px-6">
       <Button variant="ghost" size="icon" className="lg:hidden" onClick={onOpenMobileMenu} aria-label="Buka menu">
         <Menu className="h-5 w-5" />
       </Button>
@@ -128,11 +130,18 @@ function NotificationMenu() {
 }
 
 function UserMenu() {
-  const { role, setRole } = useRole();
+  const { user, profile, role, signOut } = useAuth();
+  const router = useRouter();
   const { toast } = useToast();
 
-  const handleLogout = () => {
-    toast({ title: 'Keluar dinonaktifkan pada prototype ini' });
+  const displayName = profile?.name || user?.email || 'Pengguna';
+  const fallback = (user?.email ?? '??').slice(0, 2).toUpperCase();
+
+  const handleLogout = async () => {
+    await signOut();
+    toast({ title: 'Berhasil keluar' });
+    router.push('/login');
+    router.refresh();
   };
 
   return (
@@ -145,19 +154,19 @@ function UserMenu() {
         >
           <Avatar className="h-8 w-8">
             <AvatarFallback className="bg-brand/10 text-xs font-semibold text-brand-dark">
-              {currentUser.initials}
+              {initialsOf(profile?.name ?? '', fallback)}
             </AvatarFallback>
           </Avatar>
           <div className="hidden text-left md:block">
-            <p className="text-sm font-semibold leading-tight text-ink">{currentUser.name}</p>
-            <p className="text-xs text-ink-muted">{role === 'admin' ? 'Admin' : 'Staff'}</p>
+            <p className="max-w-[12rem] truncate text-sm font-semibold leading-tight text-ink">{displayName}</p>
+            <p className="text-xs text-ink-muted">{role === 'admin' ? 'Admin / Pemilik' : 'Staff / Barista'}</p>
           </div>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel className="font-normal">
-          <p className="text-sm font-semibold text-ink">{currentUser.name}</p>
-          <p className="text-xs text-ink-muted">{currentUser.email}</p>
+          <p className="truncate text-sm font-semibold text-ink">{displayName}</p>
+          <p className="truncate text-xs text-ink-muted">{user?.email}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
@@ -166,24 +175,6 @@ function UserMenu() {
             Profil saya
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href="/settings" className="cursor-pointer">
-            <Settings className="mr-2 h-4 w-4" />
-            Pengaturan bisnis
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel className="flex items-center gap-2 text-xs font-medium text-ink-muted">
-          <ShieldCheck className="h-3.5 w-3.5" />
-          Preview tampilan role
-        </DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={role} onValueChange={(value) => setRole(value as Role)}>
-          {ROLE_OPTIONS.map((option) => (
-            <DropdownMenuRadioItem key={option.value} value={option.value} className="cursor-pointer">
-              {option.label}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={handleLogout} className="cursor-pointer text-brand-dark focus:text-brand-dark">
           <LogOut className="mr-2 h-4 w-4" />

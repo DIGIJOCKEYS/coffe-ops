@@ -1,13 +1,13 @@
 'use client';
 
-import { Calculator, Receipt, TrendingUp, Wallet, type LucideIcon } from 'lucide-react';
+import { Calculator, CupSoda, Receipt, TrendingUp, Wallet, type LucideIcon } from 'lucide-react';
 import { useRole } from '@/components/layout/role-context';
 import { formatNumber, formatRupiah } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 export type DashboardSummary = {
   omzet: number;
-  transactions: number;
+  portions: number;
   estimatedHpp: number;
   estimatedProfit: number;
   omzetChange: number;
@@ -33,15 +33,15 @@ export function KpiCards({ summary }: { summary: DashboardSummary }) {
       highlight: true,
     },
     {
-      label: 'Total Transaksi',
-      value: formatNumber(summary.transactions),
-      hint: 'Transaksi tercatat hari ini',
-      icon: Receipt,
+      label: 'Porsi Terjual',
+      value: formatNumber(summary.portions),
+      hint: 'Dari penjualan shift hari ini',
+      icon: CupSoda,
     },
     {
       label: 'Estimasi HPP',
       value: formatRupiah(summary.estimatedHpp),
-      hint: 'Perkiraan, berdasarkan resep',
+      hint: 'Berdasarkan harga beli per bungkus',
       icon: Calculator,
     },
   ];
@@ -50,7 +50,7 @@ export function KpiCards({ summary }: { summary: DashboardSummary }) {
     items.push({
       label: 'Estimasi Laba Operasional',
       value: formatRupiah(summary.estimatedProfit),
-      hint: 'Estimasi manajerial',
+      hint: 'Omzet - HPP - pengeluaran operasional',
       icon: TrendingUp,
     });
   }

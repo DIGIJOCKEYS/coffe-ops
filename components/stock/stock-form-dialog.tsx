@@ -5,34 +5,37 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import type { Ingredient, IngredientInput } from '@/lib/mock-data';
+import { Switch } from '@/components/ui/switch';
+import type { StockItem, StockItemInput } from '@/lib/mock-data';
 
 type FormState = {
   name: string;
   category: string;
   stock: string;
   minStock: string;
-  baseUnit: string;
-  purchaseUnit: string;
+  unit: string;
   unitCost: string;
+  price: string;
+  available: boolean;
 };
 
-function toFormState(item: Ingredient | null): FormState {
+function toFormState(item: StockItem | null): FormState {
   if (!item) {
-    return { name: '', category: '', stock: '0', minStock: '0', baseUnit: '', purchaseUnit: '', unitCost: '0' };
+    return { name: '', category: '', stock: '0', minStock: '0', unit: 'porsi', unitCost: '0', price: '0', available: true };
   }
   return {
     name: item.name,
     category: item.category,
     stock: String(item.stock),
     minStock: String(item.minStock),
-    baseUnit: item.baseUnit,
-    purchaseUnit: item.purchaseUnit,
+    unit: item.unit,
     unitCost: String(item.unitCost),
+    price: String(item.price),
+    available: item.available,
   };
 }
 
-export function IngredientFormDialog({
+export function StockFormDialog({
   open,
   onOpenChange,
   initial,
@@ -41,9 +44,9 @@ export function IngredientFormDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  initial: Ingredient | null;
+  initial: StockItem | null;
   categories: string[];
-  onSubmit: (input: IngredientInput) => void;
+  onSubmit: (input: StockItemInput) => void;
 }) {
   const [form, setForm] = useState<FormState>(() => toFormState(initial));
   const [error, setError] = useState<string | null>(null);
@@ -56,13 +59,14 @@ export function IngredientFormDialog({
     const stock = Number(form.stock);
     const minStock = Number(form.minStock);
     const unitCost = Number(form.unitCost);
+    const price = Number(form.price);
 
-    if (!form.name.trim() || !form.category.trim() || !form.baseUnit.trim() || !form.purchaseUnit.trim()) {
+    if (!form.name.trim() || !form.category.trim() || !form.unit.trim()) {
       setError('Nama, kategori, dan satuan wajib diisi.');
       return;
     }
-    if ([stock, minStock, unitCost].some((value) => Number.isNaN(value) || value < 0)) {
-      setError('Stok, minimum, dan harga harus berupa angka tidak negatif.');
+    if ([stock, minStock, unitCost, price].some((value) => Number.isNaN(value) || value < 0)) {
+      setError('Stok, minimum, harga beli, dan harga jual harus berupa angka tidak negatif.');
       return;
     }
 
@@ -71,9 +75,10 @@ export function IngredientFormDialog({
       category: form.category.trim(),
       stock,
       minStock,
-      baseUnit: form.baseUnit.trim(),
-      purchaseUnit: form.purchaseUnit.trim(),
+      unit: form.unit.trim(),
       unitCost,
+      price,
+      available: form.available,
     });
   };
 
@@ -81,31 +86,33 @@ export function IngredientFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{initial ? 'Edit Bahan Baku' : 'Tambah Bahan Baku'}</DialogTitle>
-          <DialogDescription>Isi data bahan baku dengan lengkap agar perhitungan HPP akurat.</DialogDescription>
+          <DialogTitle>{initial ? 'Edit Stok & Menu' : 'Tambah Stok & Menu'}</DialogTitle>
+          <DialogDescription>
+            Satu bungkus = satu porsi menu. Isi stok sekaligus menentukan menu yang dijual.
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Field label="Nama bahan baku">
-            <Input value={form.name} onChange={update('name')} placeholder="Contoh: Biji Kopi Arabica" />
+          <Field label="Nama menu / item">
+            <Input value={form.name} onChange={update('name')} placeholder="Contoh: Kopi Susu Gula Aren" />
           </Field>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Kategori">
-              <Input value={form.category} onChange={update('category')} list="ingredient-categories" placeholder="Kopi" />
-              <datalist id="ingredient-categories">
+              <Input value={form.category} onChange={update('category')} list="stock-categories" placeholder="Signature" />
+              <datalist id="stock-categories">
                 {categories.map((name) => (
                   <option key={name} value={name} />
                 ))}
               </datalist>
             </Field>
-            <Field label="Harga per satuan beli (Rp)">
+            <Field label="Satuan">
+              <Input value={form.unit} onChange={update('unit')} placeholder="porsi, bungkus" />
+            </Field>
+            <Field label="Harga beli per bungkus (Rp)">
               <Input type="number" min={0} value={form.unitCost} onChange={update('unitCost')} />
             </Field>
-            <Field label="Satuan dasar">
-              <Input value={form.baseUnit} onChange={update('baseUnit')} placeholder="gram, ml, pcs" />
-            </Field>
-            <Field label="Satuan pembelian">
-              <Input value={form.purchaseUnit} onChange={update('purchaseUnit')} placeholder="karung 1 kg" />
+            <Field label="Harga jual per porsi (Rp)">
+              <Input type="number" min={0} value={form.price} onChange={update('price')} />
             </Field>
             <Field label="Stok saat ini">
               <Input type="number" min={0} step="any" value={form.stock} onChange={update('stock')} />
@@ -113,6 +120,18 @@ export function IngredientFormDialog({
             <Field label="Minimum stok">
               <Input type="number" min={0} step="any" value={form.minStock} onChange={update('minStock')} />
             </Field>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border border-line bg-ink-50/40 px-4 py-3">
+            <div>
+              <p className="text-sm font-medium text-ink">Tersedia dijual sebagai menu</p>
+              <p className="text-xs text-ink-muted">Matikan jika item ini bukan menu yang dijual.</p>
+            </div>
+            <Switch
+              checked={form.available}
+              onCheckedChange={(checked) => setForm((prev) => ({ ...prev, available: checked }))}
+              aria-label="Tersedia dijual"
+            />
           </div>
 
           {error && <p className="text-sm text-brand-dark">{error}</p>}

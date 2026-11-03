@@ -8,8 +8,8 @@ const font = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: 'Coffee Ops',
-  description: 'Sistem manajemen operasional kedai kopi.',
+  title: 'Nestation',
+  description: 'Sistem manajemen operasional Nestation.',
 };
 
 export default function RootLayout({
