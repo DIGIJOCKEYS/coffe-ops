@@ -8,7 +8,7 @@ import {
 } from '@/types/operations';
 
 const SHIFT_LABEL: Record<Shift, string> = { 'pagi-siang': 'Pagi–Siang', 'siang-sore': 'Siang–Sore' };
-const EXPENSE_CATEGORIES: ExpenseCategory[] = ['Pembelian Stok', 'Operasional', 'Lainnya'];
+const EXPENSE_CATEGORIES: ExpenseCategory[] = ['Pembelian Stok', 'Operasional', 'Kerugian Stok', 'Lainnya'];
 const RUPIAH_FMT = '"Rp"#,##0';
 
 const BRAND = 'FFC8102E';
@@ -42,16 +42,21 @@ async function buildWorkbook(): Promise<ExcelJS.Workbook> {
   const today = todayJakarta();
   const todayExpenses = expenses.filter((expense) => expense.date === today);
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'Coffee Ops';
+  wb.creator = 'Nestation';
   wb.created = new Date();
 
   const todaySales = shiftSales.filter((shift) => shift.date === today);
-  const summary = summarizeToday(todaySales, stockItems, todayExpenses);
+  const todayTakes = stockTakes.filter((take) => {
+    const d = new Date(take.datetime);
+    const jakartaDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(d);
+    return jakartaDate === today;
+  });
+  const summary = summarizeToday(todaySales, stockItems, todayExpenses, todayTakes);
 
   // ---- Sheet 1: Ringkasan ----
   const ringkasan = wb.addWorksheet('Ringkasan', { properties: { defaultColWidth: 28 } });
-  ringkasan.columns = [{ width: 26 }, { width: 22 }];
-  ringkasan.addRow(['Coffee Ops — Laporan Operasional']);
+  ringkasan.columns = [{ width: 30 }, { width: 22 }];
+  ringkasan.addRow(['Nestation — Laporan Operasional']);
   ringkasan.getCell('A1').font = { bold: true, size: 16, color: { argb: BRAND } };
   ringkasan.addRow([`Periode: ${new Intl.DateTimeFormat('id-ID', { dateStyle: 'long', timeZone: 'Asia/Jakarta' }).format(new Date(`${today}T12:00:00+07:00`))}`]);
   ringkasan.getCell('A2').font = { italic: true, color: { argb: 'FF777777' } };
@@ -60,8 +65,10 @@ async function buildWorkbook(): Promise<ExcelJS.Workbook> {
   styleHeaderRow(ringkasan);
   ringkasan.addRow(['Omzet Hari Ini', summary.omzet]);
   rupiahCell(ringkasan, ringkasan.rowCount, 2, summary.omzet);
-  ringkasan.addRow(['Estimasi HPP', summary.estimatedHpp]);
+  ringkasan.addRow(['Estimasi HPP (Transfer)', summary.estimatedHpp]);
   rupiahCell(ringkasan, ringkasan.rowCount, 2, summary.estimatedHpp);
+  ringkasan.addRow(['Kerugian Stok (Rusak/Tumpah)', summary.lossCost]);
+  rupiahCell(ringkasan, ringkasan.rowCount, 2, summary.lossCost);
   ringkasan.addRow(['Biaya Operasional', summary.operatingCost]);
   rupiahCell(ringkasan, ringkasan.rowCount, 2, summary.operatingCost);
   ringkasan.addRow(['Estimasi Laba', summary.estimatedProfit]);
@@ -73,20 +80,35 @@ async function buildWorkbook(): Promise<ExcelJS.Workbook> {
   // ---- Sheet 2: Penjualan per Shift (rincian) ----
   const penjualan = wb.addWorksheet('Penjualan', { properties: { defaultColWidth: 18 } });
   penjualan.columns = [
-    { width: 14 }, { width: 16 }, { width: 26 }, { width: 8 }, { width: 12 }, { width: 14 },
+    { width: 14 }, { width: 16 }, { width: 26 }, { width: 8 }, { width: 12 }, { width: 14 }, { width: 12 }, { width: 16 },
   ];
-  penjualan.getRow(1).values = ['Tanggal', 'Shift', 'Menu', 'Qty', 'Harga', 'Subtotal'];
+  penjualan.getRow(1).values = ['Tanggal', 'Shift', 'Menu', 'Qty', 'Harga Jual', 'Omzet', 'HPP / Unit', 'HPP Total'];
   styleHeaderRow(penjualan);
   for (const shift of todaySales) {
     for (const line of shift.lines) {
-      const r = penjualan.addRow([shift.date, SHIFT_LABEL[shift.shift], line.name, line.qty, line.price, line.qty * line.price]);
+      const currentItem = stockItems.find((item) => item.id === line.itemId);
+      const unitCost = line.unitCost ?? currentItem?.unitCost ?? 0;
+      const r = penjualan.addRow([
+        shift.date, SHIFT_LABEL[shift.shift], line.name, line.qty,
+        line.price, line.qty * line.price, unitCost, line.qty * unitCost,
+      ]);
       rupiahCell(penjualan, r.number, 5, line.price);
       rupiahCell(penjualan, r.number, 6, line.qty * line.price);
+      rupiahCell(penjualan, r.number, 7, unitCost);
+      rupiahCell(penjualan, r.number, 8, line.qty * unitCost);
     }
   }
-  const totalPenjualanRow = penjualan.addRow(['', '', '', '', 'Total', todaySales.reduce((sum, s) => sum + s.total, 0)]);
+  const totalHpp = todaySales.reduce(
+    (sum, shift) => sum + shift.lines.reduce((lineSum, line) => {
+      const currentItem = stockItems.find((item) => item.id === line.itemId);
+      return lineSum + line.qty * (line.unitCost ?? currentItem?.unitCost ?? 0);
+    }, 0),
+    0,
+  );
+  const totalPenjualanRow = penjualan.addRow(['', '', '', '', 'Total', todaySales.reduce((sum, s) => sum + s.total, 0), '', totalHpp]);
   totalPenjualanRow.font = { bold: true };
   rupiahCell(penjualan, totalPenjualanRow.number, 6, todaySales.reduce((sum, s) => sum + s.total, 0));
+  rupiahCell(penjualan, totalPenjualanRow.number, 8, totalHpp);
   applyPrintSetup(penjualan);
 
   // ---- Sheet 3: Pengeluaran ----
@@ -115,18 +137,18 @@ async function buildWorkbook(): Promise<ExcelJS.Workbook> {
   // ---- Sheet 4: Stok & Menu ----
   const stok = wb.addWorksheet('Stok & Menu', { properties: { defaultColWidth: 14 } });
   stok.columns = [
-    { width: 26 }, { width: 16 }, { width: 10 }, { width: 10 }, { width: 10 },
+    { width: 26 }, { width: 16 }, { width: 12 }, { width: 12 }, { width: 10 }, { width: 10 },
     { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 },
   ];
-  stok.getRow(1).values = ['Nama', 'Kategori', 'Stok', 'Minimum', 'Satuan', 'Harga Beli', 'Harga Jual', 'Menu', 'Status Stok'];
+  stok.getRow(1).values = ['Nama', 'Kategori', 'Stok Gudang', 'Stok Outlet', 'Min. Outlet', 'Satuan', 'Harga Beli', 'Harga Jual', 'Menu', 'Status Outlet'];
   styleHeaderRow(stok);
   for (const item of stockItems) {
     const r = stok.addRow([
-      item.name, item.category, item.stock, item.minStock, item.unit,
+      item.name, item.category, item.stock, item.outletStock, item.minStock, item.unit,
       item.unitCost, item.price, item.available ? 'Dijual' : 'Tidak dijual', getStockStatus(item),
     ]);
-    rupiahCell(stok, r.number, 6, item.unitCost);
-    rupiahCell(stok, r.number, 7, item.price);
+    rupiahCell(stok, r.number, 7, item.unitCost);
+    rupiahCell(stok, r.number, 8, item.price);
   }
   applyPrintSetup(stok);
 
@@ -150,13 +172,14 @@ async function buildWorkbook(): Promise<ExcelJS.Workbook> {
   for (const take of waste) {
     const item = stockItems.find((i) => i.id === take.itemId);
     const r = kerugian.addRow([
-      take.datetime, take.itemName, take.qty, take.reason ?? '', take.staffName, take.qty * (item?.unitCost ?? 0),
+      take.datetime, take.itemName, take.qty, take.reason ?? '', take.staffName,
+      take.qty * (take.unitCost ?? item?.unitCost ?? 0),
     ]);
-    rupiahCell(kerugian, r.number, 6, take.qty * (item?.unitCost ?? 0));
+    rupiahCell(kerugian, r.number, 6, take.qty * (take.unitCost ?? item?.unitCost ?? 0));
   }
   const totalWaste = waste.reduce((sum, take) => {
     const item = stockItems.find((i) => i.id === take.itemId);
-    return sum + take.qty * (item?.unitCost ?? 0);
+    return sum + take.qty * (take.unitCost ?? item?.unitCost ?? 0);
   }, 0);
   if (waste.length === 0) {
     kerugian.addRow(['', 'Tidak ada kerugian tercatat', '', '', '', '']);
@@ -179,7 +202,7 @@ export async function exportReportToExcel() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `Laporan-CoffeeOps-${todayJakarta()}.xlsx`;
+  link.download = `Laporan-Nestation-${todayJakarta()}.xlsx`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

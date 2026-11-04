@@ -22,9 +22,9 @@ export function TablePagination({
   const showNav = pageCount > 1;
 
   return (
-    <div className="flex items-center justify-between gap-3 border-t border-line px-4 py-3">
-      <p className="text-xs text-ink-muted">
-        Menampilkan <span className="font-medium text-ink">{from}–{to}</span> dari {total}
+    <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-3">
+      <p className="text-xs text-muted-foreground">
+        Menampilkan <span className="font-medium text-foreground">{from}–{to}</span> dari {total}
       </p>
       {showNav && (
         <div className="flex items-center gap-1">
@@ -32,7 +32,7 @@ export function TablePagination({
             <ChevronLeft className="h-4 w-4" />
             <span className="hidden sm:inline">Sebelum</span>
           </Button>
-          <span className="px-2 text-xs tabular-nums text-ink-muted">Hal. {page} / {pageCount}</span>
+          <span className="px-2 text-xs tabular-nums text-muted-foreground">Hal. {page} / {pageCount}</span>
           <Button variant="outline" size="sm" disabled={page >= pageCount} onClick={() => onPageChange(page + 1)} aria-label="Halaman berikutnya">
             <span className="hidden sm:inline">Berikut</span>
             <ChevronRight className="h-4 w-4" />

@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { formatRupiahInput, parseRupiahInput } from '@/lib/format';
 import type { StockItem, StockItemInput } from '@/types/operations';
 
 type FormState = {
@@ -21,16 +22,16 @@ type FormState = {
 
 function toFormState(item: StockItem | null): FormState {
   if (!item) {
-    return { name: '', category: '', stock: '0', minStock: '0', unit: 'porsi', unitCost: '0', price: '0', available: true };
+    return { name: '', category: 'Lainnya', stock: '0', minStock: '0', unit: 'porsi', unitCost: '', price: '', available: true };
   }
   return {
     name: item.name,
-    category: item.category,
+    category: item.category || 'Lainnya',
     stock: String(item.stock),
     minStock: String(item.minStock),
-    unit: item.unit,
-    unitCost: String(item.unitCost),
-    price: String(item.price),
+    unit: item.unit || 'porsi',
+    unitCost: formatRupiahInput(String(item.unitCost)),
+    price: formatRupiahInput(String(item.price)),
     available: item.available,
   };
 }
@@ -53,18 +54,30 @@ export function StockFormDialog({
   const [form, setForm] = useState<FormState>(() => toFormState(initial));
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (open) {
+      setForm(toFormState(initial));
+      setError(null);
+    }
+  }, [initial, open]);
+
   const update = (key: keyof FormState) => (event: ChangeEvent<HTMLInputElement>) =>
     setForm((prev) => ({ ...prev, [key]: event.target.value }));
+
+  const updateCurrency = (key: 'unitCost' | 'price') => (event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setForm((prev) => ({ ...prev, [key]: formatRupiahInput(value) }));
+  };
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     const stock = Number(form.stock);
     const minStock = Number(form.minStock);
-    const unitCost = Number(form.unitCost);
-    const price = Number(form.price);
+    const unitCost = parseRupiahInput(form.unitCost);
+    const price = parseRupiahInput(form.price);
 
-    if (!form.name.trim() || !form.category.trim() || !form.unit.trim()) {
-      setError('Nama, kategori, dan satuan wajib diisi.');
+    if (!form.name.trim()) {
+      setError('Nama item wajib diisi.');
       return;
     }
     if ([stock, minStock, unitCost, price].some((value) => !Number.isFinite(value) || value < 0)) {
@@ -75,10 +88,10 @@ export function StockFormDialog({
     try {
       await onSubmit({
         name: form.name.trim(),
-        category: form.category.trim(),
+        category: (form.category || 'Lainnya').trim(),
         stock,
         minStock,
-        unit: form.unit.trim(),
+        unit: (form.unit || 'porsi').trim(),
         unitCost,
         price,
         available: form.available,
@@ -103,27 +116,16 @@ export function StockFormDialog({
             <Input value={form.name} onChange={update('name')} placeholder="Contoh: Kopi Susu Gula Aren" />
           </Field>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Kategori">
-              <Input value={form.category} onChange={update('category')} list="stock-categories" placeholder="Signature" />
-              <datalist id="stock-categories">
-                {categories.map((name) => (
-                  <option key={name} value={name} />
-                ))}
-              </datalist>
+            <Field label="Harga beli per bungkus">
+              <Input value={form.unitCost} onChange={updateCurrency('unitCost')} placeholder="Rp150.000" />
             </Field>
-            <Field label="Satuan">
-              <Input value={form.unit} onChange={update('unit')} placeholder="porsi, bungkus" />
+            <Field label="Harga jual per porsi">
+              <Input value={form.price} onChange={updateCurrency('price')} placeholder="Rp25.000" />
             </Field>
-            <Field label="Harga beli per bungkus (Rp)">
-              <Input type="number" min={0} value={form.unitCost} onChange={update('unitCost')} />
-            </Field>
-            <Field label="Harga jual per porsi (Rp)">
-              <Input type="number" min={0} value={form.price} onChange={update('price')} />
-            </Field>
-            <Field label="Stok saat ini">
+            <Field label="Stok gudang">
               <Input type="number" min={0} step="any" value={form.stock} onChange={update('stock')} />
             </Field>
-            <Field label="Minimum stok">
+            <Field label="Minimum stok outlet">
               <Input type="number" min={0} step="any" value={form.minStock} onChange={update('minStock')} />
             </Field>
           </div>

@@ -10,6 +10,20 @@ export function formatRupiah(value: number): string {
   return rupiahFormatter.format(value);
 }
 
+export function formatRupiahInput(value: string): string {
+  const digits = value.replace(/[^\d]/g, '');
+  if (!digits) return '';
+  const numeric = Number(digits);
+  if (!Number.isFinite(numeric)) return '';
+  return `Rp${integerFormatter.format(numeric)}`;
+}
+
+export function parseRupiahInput(value: string): number {
+  const digits = value.replace(/[^\d]/g, '');
+  if (!digits) return 0;
+  return Number(digits);
+}
+
 export function formatCompactRupiah(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace('.', ',')} jt`;
   if (value >= 1_000) return `${Math.round(value / 1_000)} rb`;

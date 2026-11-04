@@ -8,8 +8,10 @@ import { useAuth } from '@/components/layout/role-context';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
+import { useSupabaseRealtime } from '@/hooks/use-supabase-realtime';
 import { usePagination } from '@/hooks/use-pagination';
 import { TablePagination } from '@/components/shared/table-pagination';
 import { formatNumber } from '@/lib/format';
@@ -21,21 +23,36 @@ export default function StockOpnamePage() {
   const { toast } = useToast();
   const { user, profile } = useAuth();
   const { data: stockData, loading, error: loadError, refresh } = useSupabaseQuery(fetchStockItems);
+  useSupabaseRealtime(['stock_items'], refresh);
   const items = useMemo(() => stockData ?? [], [stockData]);
   const [counts, setCounts] = useState<Record<string, string>>({});
+  const [location, setLocation] = useState<'warehouse' | 'outlet'>('warehouse');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
-    setCounts(Object.fromEntries(items.map((item) => [item.id, String(item.stock)])));
-  }, [items]);
+    setCounts((current) => {
+      const missing = items.filter((item) => current[item.id] === undefined);
+      if (missing.length === 0) return current;
+      return {
+        ...current,
+        ...Object.fromEntries(missing.map((item) => [item.id, String(location === 'outlet' ? item.outletStock : item.stock)])),
+      };
+    });
+  }, [items, location]);
+
+  const changeLocation = (nextLocation: 'warehouse' | 'outlet') => {
+    setLocation(nextLocation);
+    setCounts(Object.fromEntries(items.map((item) => [item.id, String(nextLocation === 'outlet' ? item.outletStock : item.stock)])));
+  };
 
   const rows = items.map((item) => {
     const rawCount = counts[item.id];
     const fisik = Number(rawCount);
     const valid = rawCount !== undefined && rawCount !== '' && Number.isFinite(fisik) && fisik >= 0;
-    const selisih = valid ? fisik - item.stock : 0;
-    return { item, fisik: valid ? fisik : 0, valid, selisih };
+    const recorded = location === 'outlet' ? item.outletStock : item.stock;
+    const selisih = valid ? fisik - recorded : 0;
+    return { item, fisik: valid ? fisik : 0, valid, selisih, recorded };
   });
 
   const lebih = rows.filter((row) => row.selisih > 0).length;
@@ -54,15 +71,16 @@ export default function StockOpnamePage() {
     setSaveError(null);
     try {
       await saveStockCounts(
-        rows.map(({ item, fisik }) => ({ id: item.id, name: item.name, before: item.stock, after: fisik })),
+        rows.map(({ item, fisik, recorded }) => ({ id: item.id, name: item.name, before: recorded, after: fisik })),
         user.id,
         profile?.name ?? user.fullName ?? 'Pengguna',
+        location,
       );
       await refresh();
       if (lebih === 0 && kurang === 0) {
-        toast({ title: 'Stok sesuai', description: 'Tidak ada selisih. Semua stok fisik cocok dengan tercatat.' });
+        toast({ title: 'Stok sesuai', description: `Tidak ada selisih pada ${location === 'outlet' ? 'outlet' : 'gudang'}.` });
       } else {
-        toast({ title: 'Opname disimpan', description: `${lebih + kurang} item disesuaikan · ${lebih} lebih, ${kurang} kurang.` });
+        toast({ title: 'Opname disimpan', description: `${location === 'outlet' ? 'Outlet' : 'Gudang'} · ${lebih + kurang} item disesuaikan · ${lebih} lebih, ${kurang} kurang.` });
       }
     } catch (cause) {
       setSaveError(cause instanceof Error ? cause.message : 'Gagal menyimpan stock opname.');
@@ -76,12 +94,23 @@ export default function StockOpnamePage() {
     <>
       <PageHeader
         title="Stock Opname"
-        description="Hitung ulang stok fisik, bandingkan dengan yang tercatat, lalu simpan. Selisih tercatat untuk audit."
+        description="Pilih lokasi, hitung stok fisik, lalu simpan selisihnya untuk audit."
         actions={
-          <Button onClick={handleSave} disabled={hasInvalid || saving}>
-            <Check className="h-4 w-4" />
-            {saving ? 'Menyimpan...' : 'Simpan Opname'}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Select value={location} onValueChange={(value) => changeLocation(value as 'warehouse' | 'outlet')}>
+              <SelectTrigger className="w-36" aria-label="Pilih lokasi stock opname">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="warehouse">Gudang</SelectItem>
+                <SelectItem value="outlet">Outlet</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button onClick={handleSave} disabled={hasInvalid || saving}>
+              <Check className="h-4 w-4" />
+              {saving ? 'Menyimpan...' : 'Simpan Opname'}
+            </Button>
+          </div>
         }
       />
 
@@ -103,18 +132,18 @@ export default function StockOpnamePage() {
               <TableRow className="hover:bg-transparent">
                 <TableHead>Nama</TableHead>
                 <TableHead>Kategori</TableHead>
-                <TableHead className="text-right">Stok Tercatat</TableHead>
+                <TableHead className="text-right">Stok {location === 'outlet' ? 'Outlet' : 'Gudang'}</TableHead>
                 <TableHead className="text-right">Stok Fisik</TableHead>
                 <TableHead className="text-right">Selisih</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paged.map(({ item, fisik, valid, selisih }) => (
+              {paged.map(({ item, fisik, valid, selisih, recorded }) => (
                 <TableRow key={item.id}>
                   <TableCell className="font-medium text-ink">{item.name}</TableCell>
                   <TableCell className="text-ink-muted">{item.category}</TableCell>
                   <TableCell className="text-right tabular-nums text-ink-muted">
-                    {formatNumber(item.stock)} {item.unit}
+                    {formatNumber(recorded)} {item.unit}
                   </TableCell>
                   <TableCell className="text-right">
                     <Input

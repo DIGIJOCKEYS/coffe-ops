@@ -1,12 +1,11 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
 import { Eye, Pencil, Plus, Search } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { DataState } from '@/components/shared/data-state';
 import { useAuth, useRole } from '@/components/layout/role-context';
-import { StockDetailSheet } from '@/components/stock/stock-detail-sheet';
-import { StockFormDialog } from '@/components/stock/stock-form-dialog';
 import { Badge } from '@/components/ui/badge';
 import { StockStatusBadge } from '@/components/shared/stock-status-badge';
 import { TablePagination } from '@/components/shared/table-pagination';
@@ -16,12 +15,23 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
+import { useSupabaseRealtime } from '@/hooks/use-supabase-realtime';
 import { formatNumber, formatRupiah } from '@/lib/format';
 import type { StockItem, StockItemInput, StockStatus } from '@/types/operations';
 import { fetchStockItems, saveStockItem } from '@/lib/operations-data';
 import { getStockStatus } from '@/lib/stock';
 import { cn } from '@/lib/utils';
 import { useSupabaseQuery } from '@/hooks/use-supabase-query';
+
+const StockDetailSheet = dynamic(() => import('@/components/stock/stock-detail-sheet').then((mod) => mod.StockDetailSheet), {
+  ssr: false,
+  loading: () => null,
+});
+
+const StockFormDialog = dynamic(() => import('@/components/stock/stock-form-dialog').then((mod) => mod.StockFormDialog), {
+  ssr: false,
+  loading: () => null,
+});
 
 const STATUS_OPTIONS: { value: 'all' | StockStatus; label: string }[] = [
   { value: 'all', label: 'Semua status' },
@@ -33,9 +43,10 @@ const STATUS_OPTIONS: { value: 'all' | StockStatus; label: string }[] = [
 
 export default function StockPage() {
   const { role } = useRole();
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
   const { data: stockData, loading, error: loadError, refresh } = useSupabaseQuery(fetchStockItems);
+  useSupabaseRealtime(['stock_items'], refresh);
   const items = stockData ?? [];
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -76,7 +87,7 @@ export default function StockPage() {
     setSaveError(null);
     try {
       if (!user?.id) throw new Error('Sesi pengguna tidak ditemukan. Silakan login kembali.');
-      await saveStockItem(input, user.id, profile?.name ?? user.fullName ?? 'Pengguna', editTarget?.id);
+      await saveStockItem(input, user.id, editTarget?.id);
       await refresh();
       toast({ title: editTarget ? 'Stok & menu diperbarui' : 'Stok & menu ditambahkan', description: input.name });
       setFormOpen(false);
@@ -92,7 +103,7 @@ export default function StockPage() {
     <>
       <PageHeader
         title="Stok & Menu"
-        description="Input stok porsi sekaligus menentukan menu yang dijual. Satu bungkus = satu porsi."
+        description="Pantau stok gudang dan stok outlet secara terpisah. Transfer dan penjualan memperbarui saldo masing-masing."
         actions={
           isAdmin && (
             <Button onClick={openCreate}>
@@ -157,10 +168,12 @@ export default function StockPage() {
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-12">No.</TableHead>
                   <TableHead>Nama</TableHead>
                   <TableHead>Kategori</TableHead>
-                  <TableHead className="text-right">Stok</TableHead>
-                  <TableHead className="text-right">Minimum</TableHead>
+                  <TableHead className="text-right">Stok Gudang</TableHead>
+                  <TableHead className="text-right">Stok Outlet</TableHead>
+                  <TableHead className="text-right">Min. Outlet</TableHead>
                   <TableHead className="text-right">Harga Jual</TableHead>
                   <TableHead>Menu</TableHead>
                   <TableHead>Status</TableHead>
@@ -168,14 +181,18 @@ export default function StockPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paged.map((item) => {
+                {paged.map((item, index) => {
                   const itemStatus = getStockStatus(item);
                   return (
                     <TableRow key={item.id} className="group">
+                      <TableCell className="font-medium text-ink-muted">{(page - 1) * pageSize + index + 1}</TableCell>
                       <TableCell className="font-medium text-ink">{item.name}</TableCell>
                       <TableCell className="text-ink-muted">{item.category}</TableCell>
-                      <TableCell className={cn('text-right font-medium tabular-nums', itemStatus === 'aman' ? 'text-ink' : 'text-brand-dark')}>
+                      <TableCell className="text-right font-medium tabular-nums text-ink">
                         {formatNumber(item.stock)} {item.unit}
+                      </TableCell>
+                      <TableCell className={cn('text-right font-medium tabular-nums', itemStatus === 'aman' ? 'text-ink' : 'text-brand-dark')}>
+                        {formatNumber(item.outletStock)} {item.unit}
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-ink-muted">
                         {formatNumber(item.minStock)} {item.unit}

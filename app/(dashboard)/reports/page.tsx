@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { CardShell } from '@/components/shared/card-shell';
 import { StockStatusBadge } from '@/components/shared/stock-status-badge';
 import { PageHeader } from '@/components/layout/page-header';
@@ -15,7 +16,12 @@ import { cn } from '@/lib/utils';
 
 const SHIFT_LABEL: Record<Shift, string> = { 'pagi-siang': 'Pagi–Siang', 'siang-sore': 'Siang–Sore' };
 
-const EXPENSE_CATEGORIES: ExpenseCategory[] = ['Pembelian Stok', 'Operasional', 'Lainnya'];
+const LazySummaryCard = dynamic(() => Promise.resolve(SummaryCard), {
+  ssr: false,
+  loading: () => <div className="h-32 animate-pulse rounded-xl border border-line bg-background" />,
+});
+
+const EXPENSE_CATEGORIES: ExpenseCategory[] = ['Pembelian Stok', 'Operasional', 'Kerugian Stok', 'Lainnya'];
 
 export default function ReportsPage() {
   const { data, loading, error, refresh } = useSupabaseQuery(fetchReportData);
@@ -26,7 +32,13 @@ export default function ReportsPage() {
   const today = todayJakarta();
   const todaySales = shiftSales.filter((shift) => shift.date === today);
   const todayExpenses = expenses.filter((expense) => expense.date === today);
-  const summary = summarizeToday(todaySales, stockItems, todayExpenses);
+  const todayTakes = stockTakes.filter((take) => {
+    // datetime adalah ISO string, kita ambil tanggal Jakarta-nya
+    const d = new Date(take.datetime);
+    const jakartaDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(d);
+    return jakartaDate === today;
+  });
+  const summary = summarizeToday(todaySales, stockItems, todayExpenses, todayTakes);
 
   const expenseByCategory = EXPENSE_CATEGORIES.map((category) => ({
     category,
@@ -44,12 +56,11 @@ export default function ReportsPage() {
   const topMenus = Array.from(aggregateSalesByItem(todaySales).values()).sort((a, b) => b.qty - a.qty).slice(0, 5);
   const maxSold = topMenus[0]?.qty ?? 1;
 
-  const wasteTakes = stockTakes.filter((take) => take.kind === 'rusak');
+  const wasteTakes = todayTakes.filter((take) => take.kind === 'rusak');
+  const transferTakes = todayTakes.filter((take) => take.kind === 'transfer');
   const wasteQty = wasteTakes.reduce((sum, take) => sum + take.qty, 0);
-  const wasteLoss = wasteTakes.reduce((sum, take) => {
-    const item = stockItems.find((i) => i.id === take.itemId);
-    return sum + take.qty * (item?.unitCost ?? 0);
-  }, 0);
+  const wasteLoss = wasteTakes.reduce((sum, take) => sum + take.qty * (take.unitCost ?? 0), 0);
+  const transferCostTotal = transferTakes.reduce((sum, take) => sum + take.qty * (take.unitCost ?? 0), 0);
 
   return (
     <>
@@ -63,10 +74,11 @@ export default function ReportsPage() {
       {!loading && !error && (
       <div className="space-y-6">
         {/* Ringkasan keuangan */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <SummaryCard label="Omzet Hari Ini" value={formatRupiah(summary.omzet)} highlight />
-          <SummaryCard label="Estimasi HPP" value={formatRupiah(summary.estimatedHpp)} />
-          <SummaryCard label="Estimasi Laba" value={formatRupiah(summary.estimatedProfit)} hint="Omzet - HPP - biaya operasional" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <LazySummaryCard label="Omzet Hari Ini" value={formatRupiah(summary.omzet)} highlight />
+          <LazySummaryCard label="Estimasi HPP (Transfer)" value={formatRupiah(summary.estimatedHpp)} hint="Nilai modal barang ke outlet" />
+          <LazySummaryCard label="Kerugian Stok" value={formatRupiah(summary.lossCost)} hint="Barang rusak / tumpah × harga beli" danger={summary.lossCost > 0} />
+          <LazySummaryCard label="Estimasi Laba" value={formatRupiah(summary.estimatedProfit)} hint="Omzet − HPP − Kerugian − Operasional" highlight={summary.estimatedProfit > 0} danger={summary.estimatedProfit < 0} />
         </div>
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -150,18 +162,38 @@ export default function ReportsPage() {
           </CardShell>
 
           {/* Kerugian stok (rusak/tumpah) */}
-          <CardShell title="Kerugian Stok" description="Item rusak, tumpah, atau hilang">
+          <CardShell title="Kerugian Stok" description="Item rusak, tumpah, atau hilang di outlet">
             {wasteTakes.length === 0 ? (
               <p className="py-6 text-center text-sm text-ink-muted">Tidak ada kerugian tercatat.</p>
             ) : (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm text-ink-muted">Total porsi rusak/tumpah</p>
+                  <p className="text-sm text-ink-muted">Total item rusak/tumpah</p>
                   <p className="text-sm font-semibold text-ink">{formatNumber(wasteQty)} porsi</p>
                 </div>
                 <div className="flex items-center justify-between border-t border-line pt-3">
-                  <p className="text-sm text-ink-muted">Estimasi kerugian</p>
-                  <p className="text-sm font-bold text-brand-dark">{formatRupiah(wasteLoss)}</p>
+                  <p className="text-sm text-ink-muted">Estimasi kerugian (harga beli)</p>
+                  <p className="text-sm font-bold text-red-600">{formatRupiah(wasteLoss)}</p>
+                </div>
+              </div>
+            )}
+          </CardShell>
+
+          {/* Estimasi biaya modal transfer */}
+          <CardShell title="Biaya Modal Transfer" description="Nilai HPP barang dipindah ke outlet">
+            {transferTakes.length === 0 ? (
+              <p className="py-6 text-center text-sm text-ink-muted">Tidak ada transfer tercatat hari ini.</p>
+            ) : (
+              <div className="space-y-3">
+                {transferTakes.map((take) => (
+                  <div key={take.id} className="flex items-center justify-between text-sm">
+                    <span className="text-ink-muted">{take.itemName} × {formatNumber(take.qty)}</span>
+                    <span className="tabular-nums font-medium text-ink">{formatRupiah(take.qty * (take.unitCost ?? 0))}</span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between border-t border-line pt-3">
+                  <p className="text-sm text-ink-muted">Total HPP transfer</p>
+                  <p className="text-sm font-bold text-ink">{formatRupiah(transferCostTotal)}</p>
                 </div>
               </div>
             )}
@@ -173,11 +205,15 @@ export default function ReportsPage() {
   );
 }
 
-function SummaryCard({ label, value, hint, highlight }: { label: string; value: string; hint?: string; highlight?: boolean }) {
+function SummaryCard({ label, value, hint, highlight, danger }: { label: string; value: string; hint?: string; highlight?: boolean; danger?: boolean }) {
   return (
-    <div className={cn('rounded-xl border border-line bg-white p-5 shadow-sm', highlight && 'ring-1 ring-brand/20')}>
+    <div className={cn(
+      'rounded-xl border border-line bg-white p-5 shadow-sm',
+      highlight && 'ring-1 ring-brand/20',
+      danger && 'ring-1 ring-red-200',
+    )}>
       <p className="text-sm font-medium text-ink-muted">{label}</p>
-      <p className="mt-2 text-2xl font-bold tracking-tight text-ink">{value}</p>
+      <p className={cn('mt-2 text-2xl font-bold tracking-tight', danger ? 'text-red-600' : 'text-ink')}>{value}</p>
       {hint && <p className="mt-1 text-xs text-ink-muted">{hint}</p>}
     </div>
   );

@@ -2,94 +2,201 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
-  }
-}
-
 @layer base {
   :root {
-    --background: 0 0% 96.1%;
-    --foreground: 0 0% 14.5%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 14.5%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 14.5%;
-    --primary: 350 85% 42%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 14.5%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 46.7%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 14.5%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 91.4%;
-    --input: 0 0% 91.4%;
-    --ring: 350 85% 42%;
+    /* ── Light ──────────────────────────────────────────── */
+    --background:        0 0% 95%;
+    --foreground:        220 15% 12%;
+    --card:              0 0% 100%;
+    --card-foreground:   220 15% 12%;
+    --popover:           0 0% 100%;
+    --popover-foreground:220 15% 12%;
+    --primary:           354 84% 40%;
+    --primary-foreground:0 0% 100%;
+    --secondary:         0 0% 94%;
+    --secondary-foreground:220 15% 12%;
+    --muted:             0 0% 94%;
+    --muted-foreground:  220 8% 46%;
+    --accent:            0 0% 91%;
+    --accent-foreground: 220 15% 12%;
+    --destructive:       0 84% 60%;
+    --destructive-foreground:0 0% 98%;
+    --border:            0 0% 89%;
+    --input:             0 0% 89%;
+    --ring:              354 84% 40%;
+    --radius:            0.5rem;
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
   }
+
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    /* ── Dark — Nestation deep charcoal ─────────────────── */
+    --background:        222 18% 9%;    /* #111520 */
+    --foreground:        210 22% 92%;   /* #e8ecf4 */
+    --card:              222 16% 14%;   /* #1b2030 */
+    --card-foreground:   210 22% 92%;
+    --popover:           222 16% 16%;   /* #1f2538 */
+    --popover-foreground:210 22% 92%;
+    --primary:           4 90% 52%;     /* #f01f06 */
+    --primary-foreground:0 0% 100%;
+    --secondary:         222 16% 18%;   /* #232a3c */
+    --secondary-foreground:210 22% 92%;
+    --muted:             222 16% 18%;
+    --muted-foreground:  220 12% 58%;   /* #848da8 */
+    --accent:            222 16% 21%;   /* #272f44 */
+    --accent-foreground: 210 22% 92%;
+    --destructive:       0 72% 51%;
+    --destructive-foreground:0 0% 100%;
+    --border:            222 14% 22%;   /* #2c3448 */
+    --input:             222 14% 20%;   /* #272d3f */
+    --ring:              4 90% 52%;
+    --chart-1: 220 70% 62%;
+    --chart-2: 160 60% 52%;
+    --chart-3: 32 80% 58%;
+    --chart-4: 280 65% 65%;
+    --chart-5: 354 84% 55%;
   }
 }
 
 @layer base {
-  * {
-    @apply border-border;
+  * { @apply border-border; }
+
+  html { color-scheme: light; }
+  html.dark { color-scheme: dark; }
+
+  body { @apply bg-background text-foreground; }
+
+  /* ── Smooth transitions ──────────────────────────────── */
+  *, *::before, *::after {
+    transition-property: background-color, border-color, color, fill, stroke;
+    transition-timing-function: ease;
+    transition-duration: 120ms;
   }
-  body {
-    @apply bg-background text-foreground;
+  button, a, input, select, textarea, [role="button"] {
+    transition-property: background-color, border-color, color, box-shadow,
+                         opacity, transform, fill, stroke;
+  }
+}
+
+/* ── Dark mode utility overrides ─────────────────────────
+   These classes are widely used across the codebase with
+   hardcoded values. We override them in dark context here
+   so individual files don't need changing.
+   ──────────────────────────────────────────────────────── */
+@layer utilities {
+
+  /* ── Cards, panels, table wrappers ── */
+  .dark .bg-white {
+    background-color: hsl(var(--card)) !important;
+    color: hsl(var(--card-foreground));
+  }
+
+  /* Subtle inner fills */
+  .dark .bg-gray-50,
+  .dark .bg-ink-50\/40 {
+    background-color: hsl(var(--accent)) !important;
+  }
+
+  /* Dashboard background */
+  .dark .bg-background {
+    background-color: hsl(var(--background)) !important;
+  }
+
+  /* ── Borders ── */
+  .dark .border-line {
+    border-color: hsl(var(--border)) !important;
+  }
+  .dark .divide-line > * + * {
+    border-color: hsl(var(--border)) !important;
+  }
+
+  /* ── Typography ── */
+  .dark .text-ink {
+    color: hsl(var(--foreground)) !important;
+  }
+  .dark .text-ink-muted {
+    color: hsl(var(--muted-foreground)) !important;
+  }
+
+  /* ── Navbar ── */
+  .dark [data-navbar] {
+    background-color: hsl(222 16% 12% / 0.92) !important;
+    border-bottom-color: hsl(var(--border)) !important;
+  }
+
+  /* ── Sidebar ── */
+  .dark [data-sidebar] {
+    background-color: hsl(222 18% 10%) !important;
+    border-right-color: hsl(var(--border)) !important;
+  }
+
+  /* Active nav item */
+  .dark .bg-brand\/10 {
+    background-color: hsl(4 90% 52% / 0.18) !important;
+  }
+  .dark .text-brand-dark {
+    color: hsl(4 90% 68%) !important;
+  }
+
+  /* Notification unread */
+  .dark .bg-red-50\/70 {
+    background-color: hsl(4 80% 18% / 0.55) !important;
+  }
+
+  /* ── Table row hover ── */
+  .dark .hover\:bg-muted\/50:hover {
+    background-color: hsl(var(--accent)) !important;
+  }
+
+  /* ── Input fields ── */
+  .dark input:not([type=checkbox]):not([type=radio]),
+  .dark textarea,
+  .dark select {
+    background-color: hsl(var(--input)) !important;
+    border-color: hsl(var(--border)) !important;
+    color: hsl(var(--foreground)) !important;
+  }
+  .dark input::placeholder,
+  .dark textarea::placeholder {
+    color: hsl(var(--muted-foreground)) !important;
+  }
+
+  /* ── Badge bg variants ── */
+  .dark .bg-ink\/5 {
+    background-color: hsl(210 22% 92% / 0.08) !important;
+  }
+  .dark .bg-emerald-50 { background-color: hsl(152 60% 12%) !important; }
+  .dark .text-emerald-700 { color: hsl(152 60% 55%) !important; }
+  .dark .bg-sky-50 { background-color: hsl(200 65% 12%) !important; }
+  .dark .text-sky-700 { color: hsl(200 70% 58%) !important; }
+  .dark .bg-amber-50 { background-color: hsl(43 80% 12%) !important; }
+  .dark .text-amber-700 { color: hsl(43 90% 60%) !important; }
+  .dark .bg-red-50 { background-color: hsl(4 75% 12%) !important; }
+  .dark .text-red-700 { color: hsl(4 80% 65%) !important; }
+
+  /* ── Shadow softer ── */
+  .dark .shadow-sm {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.5), 0 1px 2px rgba(0,0,0,0.4) !important;
+  }
+
+  /* ── Summary card ring ── */
+  .dark .ring-brand\/20 {
+    --tw-ring-color: hsl(4 90% 52% / 0.3);
+  }
+
+  /* ── Dropdown / Popover ── */
+  .dark [data-radix-popper-content-wrapper] [class*="rounded"] {
+    background-color: hsl(var(--popover)) !important;
+    border-color: hsl(var(--border)) !important;
+    color: hsl(var(--popover-foreground)) !important;
   }
 }
 
 @media print {
-  [data-sidebar],
-  [data-navbar] {
-    display: none !important;
-  }
-  [data-main-wrapper] {
-    padding-left: 0 !important;
-  }
-  body {
-    background: #ffffff !important;
-  }
+  [data-sidebar], [data-navbar] { display: none !important; }
+  [data-main-wrapper] { padding-left: 0 !important; }
+  body { background: #ffffff !important; }
 }

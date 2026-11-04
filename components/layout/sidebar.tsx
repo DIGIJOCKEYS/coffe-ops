@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Coffee, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { canAccess, NAV_GROUPS, type NavItem } from '@/lib/nav-config';
 import { cn } from '@/lib/utils';
@@ -27,12 +27,23 @@ export function SidebarNav({ collapsed, onToggleCollapsed, onNavigate }: Sidebar
             collapsed ? 'justify-center px-2' : 'justify-between px-5',
           )}
         >
-          <Link href="/dashboard" onClick={onNavigate} className="flex items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand text-white shadow-sm">
-              <Coffee className="h-5 w-5" />
-            </span>
-            {!collapsed && (
-              <span className="text-sm font-bold tracking-wider text-ink">COFFEE OPS</span>
+          <Link href="/dashboard" onClick={onNavigate} className="flex items-center gap-2 min-w-0">
+            {collapsed ? (
+              /* Collapsed: kotak merah + huruf N */
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#e00000] shadow-sm">
+                <span className="text-base font-black text-white leading-none">N</span>
+              </span>
+            ) : (
+              /* Expanded: ikon SVG + teks — bekerja di light & dark */
+              <div className="flex items-center gap-2">
+                <svg width="28" height="28" viewBox="0 0 36 36" fill="none" className="shrink-0">
+                  <circle cx="18" cy="18" r="18" fill="#e00000" />
+                  <ellipse cx="18" cy="18" rx="10" ry="7" fill="#ff6b00" transform="rotate(-30 18 18)" />
+                  <ellipse cx="18" cy="18" rx="6" ry="3.5" fill="#e00000" transform="rotate(-30 18 18)" />
+                  <ellipse cx="14" cy="14" rx="4" ry="2.5" fill="#ffa500" opacity="0.7" transform="rotate(-30 14 14)" />
+                </svg>
+                <span className="text-sm font-black tracking-wider text-foreground uppercase">Nestation</span>
+              </div>
             )}
           </Link>
           {onToggleCollapsed && !collapsed && (

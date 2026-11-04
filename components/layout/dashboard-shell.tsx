@@ -19,7 +19,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         <aside
           data-sidebar
           className={cn(
-            'fixed inset-y-0 left-0 z-30 hidden border-r border-line bg-white transition-[width] duration-300 ease-out lg:block',
+            'fixed inset-y-0 left-0 z-30 hidden border-r border-border bg-card transition-[width] duration-300 ease-out lg:block',
             collapsed ? 'w-[76px]' : 'w-64',
           )}
         >

@@ -1,11 +1,12 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useUser, useClerk } from '@clerk/nextjs';
 import { createClient } from '@/lib/supabase/client';
+import { useSupabaseRealtime } from '@/hooks/use-supabase-realtime';
 import type { Role } from '@/lib/nav-config';
 
-type Profile = { name: string; role: Role };
+type Profile = { name: string; role: Role; isActive: boolean };
 
 type AuthContextValue = {
   user: any;
@@ -32,16 +33,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const avatarUrl = user?.imageUrl || null;
   const metadataRole = user?.publicMetadata?.role;
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [profileUserId, setProfileUserId] = useState<string | null>(null);
-  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [profileRevision, setProfileRevision] = useState(0);
+  const refreshProfile = useCallback(() => setProfileRevision((revision) => revision + 1), []);
 
   useEffect(() => {
     if (!isLoaded) return;
 
     if (!userId) {
       setProfile(null);
-      setProfileUserId(null);
       setProfileLoading(false);
       setError(null);
       return;
@@ -51,21 +52,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const syncProfileWithSupabase = async () => {
       setProfileLoading(true);
       setError(null);
-      setProfile(null);
-      setProfileUserId(null);
-      const displayName =
-        fullName ||
-        firstName ||
-        emailAddress?.split('@')[0] ||
-        'Pengguna';
+      const displayName = fullName || firstName || emailAddress?.split('@')[0] || 'Pengguna';
       const email = emailAddress || '';
 
       try {
         const supabase = createClient();
-        // Cek profil di tabel Supabase
         const { data, error } = await supabase
           .from('profiles')
-          .select('id, name, role')
+          .select('id, name, role, is_active')
           .eq('id', userId)
           .maybeSingle();
 
@@ -78,8 +72,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setProfile({
               name: data.name || displayName,
               role: isRole(data.role) ? data.role : 'staff',
+              isActive: data.is_active !== false,
             });
-            setProfileUserId(userId);
           }
         } else {
           const { count, error: countError } = await supabase
@@ -88,6 +82,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (countError) throw countError;
 
           const defaultRole: Role = isRole(metadataRole) ? metadataRole : count === 0 ? 'admin' : 'staff';
+          // Akun baru (selain admin pertama) dibuat non-aktif dulu.
+          // Admin harus mengaktifkan manual di halaman Pengguna.
+          const defaultActive = count === 0;
 
           const { error: insertError } = await supabase.from('profiles').insert({
             id: userId,
@@ -95,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email,
             avatar_url: avatarUrl,
             role: defaultRole,
+            is_active: defaultActive,
           });
           if (insertError) throw insertError;
 
@@ -102,8 +100,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setProfile({
               name: displayName,
               role: defaultRole,
+              isActive: defaultActive,
             });
-            setProfileUserId(userId);
           }
         }
       } catch (error) {
@@ -122,22 +120,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       isMounted = false;
     };
-  }, [
-    isLoaded,
-    userId,
-    fullName,
-    firstName,
-    emailAddress,
-    avatarUrl,
-    metadataRole,
-  ]);
+  }, [isLoaded, userId, fullName, firstName, emailAddress, avatarUrl, metadataRole, profileRevision]);
+
+  useSupabaseRealtime(['profiles'], refreshProfile, Boolean(userId));
 
   const activeRole: Role = profile?.role || (isRole(metadataRole) ? metadataRole : 'staff');
 
   const value: AuthContextValue = {
     user: user ?? null,
     profile,
-    loading: !isLoaded || (!!user && (profileLoading || profileUserId !== user.id)),
+    loading: !isLoaded || (!!user && profileLoading),
     error,
     role: activeRole,
     signOut: async () => {
@@ -154,7 +146,6 @@ export function useAuth(): AuthContextValue {
   return context;
 }
 
-// Kompatibilitas untuk konsumen lama yang pakai useRole().role
 export function useRole() {
   return { role: useAuth().role };
 }

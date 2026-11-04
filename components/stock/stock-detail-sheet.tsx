@@ -21,7 +21,7 @@ export function StockDetailSheet({
   onEdit: () => void;
 }) {
   const status = item ? getStockStatus(item) : 'aman';
-  const percent = item && item.minStock > 0 ? Math.min((item.stock / item.minStock) * 100, 100) : 0;
+  const percent = item && item.minStock > 0 ? Math.min((item.outletStock / item.minStock) * 100, 100) : 0;
 
   return (
     <Sheet open={item !== null} onOpenChange={onOpenChange}>
@@ -39,12 +39,13 @@ export function StockDetailSheet({
         {item && (
           <div className="space-y-5 px-4">
             <div className="rounded-xl border border-line bg-ink-50/40 p-4">
-              <p className="text-xs text-ink-muted">Stok saat ini</p>
+              <p className="text-xs text-ink-muted">Stok outlet</p>
               <p className="mt-1 text-2xl font-semibold text-ink">
-                {formatNumber(item.stock)} {item.unit}
+                {formatNumber(item.outletStock)} {item.unit}
               </p>
               <Progress value={percent} className="mt-3 h-2 [&>div]:bg-brand" />
               <p className="mt-2 text-xs text-ink-muted">Minimum stok {formatNumber(item.minStock)} {item.unit}</p>
+              <p className="mt-1 text-xs text-ink-muted">Stok gudang {formatNumber(item.stock)} {item.unit}</p>
             </div>
 
             <dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-sm">

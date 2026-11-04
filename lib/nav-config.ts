@@ -37,9 +37,9 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Operasional',
     items: [
-      { href: '/stock', label: 'Stok & Menu', icon: Package, roles: ALL_ROLES },
-      { href: '/stock-takes', label: 'Ambil Barang', icon: ArrowUpFromLine, roles: ALL_ROLES },
-      { href: '/stock-opname', label: 'Stock Opname', icon: ClipboardCheck, roles: ALL_ROLES },
+      { href: '/stock', label: 'Stok & Menu', icon: Package, roles: ADMIN_ONLY },
+      { href: '/stock-takes', label: 'Mutasi Stok', icon: ArrowUpFromLine, roles: ALL_ROLES },
+      { href: '/stock-opname', label: 'Stock Opname', icon: ClipboardCheck, roles: ADMIN_ONLY },
       { href: '/sales', label: 'Penjualan', icon: ShoppingBag, roles: ALL_ROLES },
       { href: '/expenses', label: 'Pengeluaran', icon: Wallet, roles: ALL_ROLES },
     ],

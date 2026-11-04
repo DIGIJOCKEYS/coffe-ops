@@ -1,30 +1,28 @@
 import { ClerkProvider } from '@clerk/nextjs';
 import './globals.css';
 import type { Metadata } from 'next';
-import { Plus_Jakarta_Sans } from 'next/font/google';
 import { SuppressRechartsWarning } from '@/components/shared/suppress-recharts-warning';
-
-const font = Plus_Jakarta_Sans({
-  subsets: ['latin'],
-  weight: ['400', '500', '700'],
-});
+import { ThemeProvider } from '@/components/layout/theme-provider';
 
 export const metadata: Metadata = {
-  title: 'Nestation',
-  description: 'Sistem manajemen operasional Nestation.',
+  title: 'Nestation — Sistem Operasional',
+  description: 'Sistem manajemen operasional internal Nestation.',
+  icons: {
+    icon: '/nestation-logo.png',
+    shortcut: '/nestation-logo.png',
+    apple: '/nestation-logo.png',
+  },
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <ClerkProvider>
-      <html lang="id">
-        <body className={`${font.className} antialiased`}>
-          <SuppressRechartsWarning />
-          {children}
+      <html lang="id" suppressHydrationWarning>
+        <body className="antialiased" suppressHydrationWarning>
+          <ThemeProvider>
+            <SuppressRechartsWarning />
+            {children}
+          </ThemeProvider>
         </body>
       </html>
     </ClerkProvider>

@@ -15,11 +15,11 @@ export function CardShell({
   className?: string;
 }) {
   return (
-    <section className={cn('flex flex-col rounded-xl border border-line bg-white shadow-sm', className)}>
-      <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
+    <section className={cn('flex flex-col rounded-xl border border-border bg-card shadow-sm', className)}>
+      <header className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-ink">{title}</h2>
-          {description && <p className="mt-0.5 text-xs text-ink-muted">{description}</p>}
+          <h2 className="text-sm font-semibold text-card-foreground">{title}</h2>
+          {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
         </div>
         {action}
       </header>

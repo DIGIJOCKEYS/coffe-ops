@@ -15,14 +15,14 @@ const SHIFT_LABEL: Record<Shift, string> = {
   'siang-sore': 'Siang–Sore',
 };
 
-export function TopMenusCard({ sales }: { sales: ShiftSales[] }) {
+export function TopMenusCard({ sales, dateLabel = 'hari ini' }: { sales: ShiftSales[]; dateLabel?: string }) {
   const aggregated = Array.from(aggregateSalesByItem(sales).values()).sort((a, b) => b.qty - a.qty).slice(0, 5);
   const maxSold = aggregated[0]?.qty ?? 1;
 
   return (
     <CardShell
       title="Menu Terlaris"
-      description="Berdasarkan porsi terjual hari ini"
+      description={`Berdasarkan porsi terjual ${dateLabel}`}
       action={<Link href="/sales" className={VIEW_ALL_LINK}>Lihat penjualan</Link>}
     >
       {aggregated.length === 0 ? (
@@ -54,19 +54,21 @@ export function TopMenusCard({ sales }: { sales: ShiftSales[] }) {
   );
 }
 
-export function LowStockCard({ items }: { items: StockItem[] }) {
+export function LowStockCard({ items, available = true }: { items: StockItem[]; available?: boolean }) {
   const lowStock = items
     .map((item) => ({ item, status: getStockStatus(item) }))
     .filter(({ status }) => status !== 'aman')
-    .sort((a, b) => a.item.stock / a.item.minStock - b.item.stock / b.item.minStock);
+    .sort((a, b) => a.item.outletStock / a.item.minStock - b.item.outletStock / b.item.minStock);
 
   return (
     <CardShell
       title="Stok Menipis"
-      description="Item yang perlu segera diisi ulang"
+      description="Stok outlet yang perlu segera diisi ulang"
       action={<Link href="/stock" className={VIEW_ALL_LINK}>Kelola stok</Link>}
     >
-      {lowStock.length === 0 ? (
+      {!available ? (
+        <p className="py-6 text-center text-sm text-ink-muted">Snapshot stok belum tersedia untuk tanggal ini.</p>
+      ) : lowStock.length === 0 ? (
         <p className="py-6 text-center text-sm text-ink-muted">Semua stok aman.</p>
       ) : (
         <ul className="divide-y divide-line">
@@ -75,7 +77,7 @@ export function LowStockCard({ items }: { items: StockItem[] }) {
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-ink">{item.name}</p>
                 <p className="text-xs text-ink-muted">
-                  Sisa {formatNumber(item.stock)} {item.unit} · Minimum {formatNumber(item.minStock)} {item.unit}
+                  Sisa {formatNumber(item.outletStock)} {item.unit} · Minimum {formatNumber(item.minStock)} {item.unit}
                 </p>
               </div>
               <StockStatusBadge status={status} />
@@ -87,9 +89,9 @@ export function LowStockCard({ items }: { items: StockItem[] }) {
   );
 }
 
-export function ActivityCard({ entries }: { entries: AuditEntry[] }) {
+export function ActivityCard({ entries, dateLabel = 'hari ini' }: { entries: AuditEntry[]; dateLabel?: string }) {
   return (
-    <CardShell title="Aktivitas Terbaru" description="Linimasa audit hari ini">
+    <CardShell title="Aktivitas Terbaru" description={`Linimasa audit ${dateLabel}`}>
       <ol className="relative space-y-5 before:absolute before:inset-y-1 before:left-[7px] before:w-px before:bg-line">
         {entries.map((entry) => (
           <li key={entry.id} className="relative flex gap-4 pl-7">
@@ -116,10 +118,10 @@ export function ActivityCard({ entries }: { entries: AuditEntry[] }) {
   );
 }
 
-export function ShiftSalesCard({ sales }: { sales: ShiftSales[] }) {
+export function ShiftSalesCard({ sales, dateLabel = 'hari ini' }: { sales: ShiftSales[]; dateLabel?: string }) {
   return (
     <CardShell
-      title="Penjualan Shift Hari Ini"
+      title={`Penjualan Shift ${dateLabel}`}
       description="Rincian per shift"
       action={
         <Link href="/sales" className={cn(VIEW_ALL_LINK, 'inline-flex items-center gap-1')}>
