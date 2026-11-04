@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <ClerkProvider>
+    <ClerkProvider proxyUrl="/__clerk">
       <html lang="id" suppressHydrationWarning>
         <body className="antialiased" suppressHydrationWarning>
           <ThemeProvider>
