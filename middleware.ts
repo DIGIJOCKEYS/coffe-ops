@@ -1,53 +1,22 @@
-import { createServerClient } from '@supabase/ssr';
-import { NextResponse, type NextRequest } from 'next/server';
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
-// Proteksi semua route (kecuali aset statis) — wajib login.
-// Sekaligus menyegarkan session Supabase lewat cookie.
-export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({ request });
+const isPublicRoute = createRouteMatcher([
+  '/sign-in(.*)',
+  '/sign-up(.*)',
+  '/login(.*)',
+]);
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
-        },
-      },
-    },
-  );
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const isLoginPage = request.nextUrl.pathname.startsWith('/login');
-
-  // belum login & bukan halaman login -> arahkan ke login
-  if (!user && !isLoginPage) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/login';
-    url.search = '';
-    return NextResponse.redirect(url);
+export default clerkMiddleware(async (auth, request) => {
+  if (!isPublicRoute(request)) {
+    await auth.protect();
   }
-
-  // sudah login & di halaman login -> arahkan ke dashboard
-  if (user && isLoginPage) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/dashboard';
-    url.search = '';
-    return NextResponse.redirect(url);
-  }
-
-  return response;
-}
+});
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)'],
+  matcher: [
+    // Skip Next.js internals and all static files, unless found in search params
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes
+    '/(api|trpc)(.*)',
+  ],
 };

@@ -1,6 +1,8 @@
+import { ClerkProvider } from '@clerk/nextjs';
 import './globals.css';
 import type { Metadata } from 'next';
 import { Plus_Jakarta_Sans } from 'next/font/google';
+import { SuppressRechartsWarning } from '@/components/shared/suppress-recharts-warning';
 
 const font = Plus_Jakarta_Sans({
   subsets: ['latin'],
@@ -18,8 +20,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="id">
-      <body className={`${font.className} antialiased`}>{children}</body>
-    </html>
+    <ClerkProvider>
+      <html lang="id">
+        <body className={`${font.className} antialiased`}>
+          <SuppressRechartsWarning />
+          {children}
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

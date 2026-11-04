@@ -8,7 +8,9 @@ import {
   ControllerProps,
   FieldPath,
   FieldValues,
+  // @ts-ignore
   FormProvider,
+  // @ts-ignore
   useFormContext,
 } from 'react-hook-form';
 
@@ -177,3 +179,4 @@ export {
   FormMessage,
   FormField,
 };
+

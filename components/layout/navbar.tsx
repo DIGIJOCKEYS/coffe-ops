@@ -2,25 +2,17 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { Bell, LogOut, Menu, User } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { usePathname } from 'next/navigation';
+import { Bell, Menu } from 'lucide-react';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/components/layout/role-context';
+import { UserButton } from '@clerk/nextjs';
+import { useRole } from '@/components/layout/role-context';
 import { findNavGroupTitle, findNavItem } from '@/lib/nav-config';
 import { notifications as initialNotifications } from '@/lib/mock-data';
 import { cn } from '@/lib/utils';
-
-function initialsOf(name: string, fallback: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return fallback.slice(0, 2).toUpperCase();
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[1][0]).toUpperCase();
-}
 
 export function Navbar({ onOpenMobileMenu }: { onOpenMobileMenu: () => void }) {
   return (
@@ -29,7 +21,7 @@ export function Navbar({ onOpenMobileMenu }: { onOpenMobileMenu: () => void }) {
         <Menu className="h-5 w-5" />
       </Button>
       <NavBreadcrumb />
-      <div className="ml-auto flex items-center gap-1 sm:gap-2">
+      <div className="ml-auto flex items-center gap-2 sm:gap-4">
         <NotificationMenu />
         <UserMenu />
       </div>
@@ -130,57 +122,23 @@ function NotificationMenu() {
 }
 
 function UserMenu() {
-  const { user, profile, role, signOut } = useAuth();
-  const router = useRouter();
-  const { toast } = useToast();
-
-  const displayName = profile?.name || user?.email || 'Pengguna';
-  const fallback = (user?.email ?? '??').slice(0, 2).toUpperCase();
-
-  const handleLogout = async () => {
-    await signOut();
-    toast({ title: 'Berhasil keluar' });
-    router.push('/login');
-    router.refresh();
-  };
+  const { role } = useRole();
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className="flex items-center gap-3 rounded-xl py-1.5 pl-1.5 pr-2 transition-colors hover:bg-background"
-          aria-label="Menu profil"
-        >
-          <Avatar className="h-8 w-8">
-            <AvatarFallback className="bg-brand/10 text-xs font-semibold text-brand-dark">
-              {initialsOf(profile?.name ?? '', fallback)}
-            </AvatarFallback>
-          </Avatar>
-          <div className="hidden text-left md:block">
-            <p className="max-w-[12rem] truncate text-sm font-semibold leading-tight text-ink">{displayName}</p>
-            <p className="text-xs text-ink-muted">{role === 'admin' ? 'Admin / Pemilik' : 'Staff / Barista'}</p>
-          </div>
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuLabel className="font-normal">
-          <p className="truncate text-sm font-semibold text-ink">{displayName}</p>
-          <p className="truncate text-xs text-ink-muted">{user?.email}</p>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/settings" className="cursor-pointer">
-            <User className="mr-2 h-4 w-4" />
-            Profil saya
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={handleLogout} className="cursor-pointer text-brand-dark focus:text-brand-dark">
-          <LogOut className="mr-2 h-4 w-4" />
-          Keluar
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <div className="flex items-center gap-3">
+      <div className="hidden text-right md:block">
+        <p className="text-xs font-medium text-ink-muted">
+          {role === 'admin' ? 'Admin / Pemilik' : 'Staff / Barista'}
+        </p>
+      </div>
+      <UserButton
+        signInUrl="/sign-in"
+        appearance={{
+          elements: {
+            avatarBox: 'h-8 w-8',
+          },
+        }}
+      />
+    </div>
   );
 }
