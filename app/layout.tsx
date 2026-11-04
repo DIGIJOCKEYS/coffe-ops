@@ -4,6 +4,9 @@ import type { Metadata } from 'next';
 import { SuppressRechartsWarning } from '@/components/shared/suppress-recharts-warning';
 import { ThemeProvider } from '@/components/layout/theme-provider';
 
+// Force dynamic rendering — required for Clerk auth to work correctly on Vercel
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'Nestation — Sistem Operasional',
   description: 'Sistem manajemen operasional internal Nestation.',

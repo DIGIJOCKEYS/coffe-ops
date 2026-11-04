@@ -8,6 +8,8 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', 'date-fns'],
   },
+  // Disable static export - required when using Clerk auth
+  output: undefined,
 };
 
 module.exports = nextConfig;
