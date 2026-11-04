@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import type { StockItem, StockItemInput } from '@/lib/mock-data';
+import type { StockItem, StockItemInput } from '@/types/operations';
 
 type FormState = {
   name: string;
@@ -41,12 +41,14 @@ export function StockFormDialog({
   initial,
   categories,
   onSubmit,
+  saving,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initial: StockItem | null;
   categories: string[];
-  onSubmit: (input: StockItemInput) => void;
+  onSubmit: (input: StockItemInput) => Promise<void>;
+  saving: boolean;
 }) {
   const [form, setForm] = useState<FormState>(() => toFormState(initial));
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +56,7 @@ export function StockFormDialog({
   const update = (key: keyof FormState) => (event: ChangeEvent<HTMLInputElement>) =>
     setForm((prev) => ({ ...prev, [key]: event.target.value }));
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     const stock = Number(form.stock);
     const minStock = Number(form.minStock);
@@ -65,21 +67,25 @@ export function StockFormDialog({
       setError('Nama, kategori, dan satuan wajib diisi.');
       return;
     }
-    if ([stock, minStock, unitCost, price].some((value) => Number.isNaN(value) || value < 0)) {
+    if ([stock, minStock, unitCost, price].some((value) => !Number.isFinite(value) || value < 0)) {
       setError('Stok, minimum, harga beli, dan harga jual harus berupa angka tidak negatif.');
       return;
     }
 
-    onSubmit({
-      name: form.name.trim(),
-      category: form.category.trim(),
-      stock,
-      minStock,
-      unit: form.unit.trim(),
-      unitCost,
-      price,
-      available: form.available,
-    });
+    try {
+      await onSubmit({
+        name: form.name.trim(),
+        category: form.category.trim(),
+        stock,
+        minStock,
+        unit: form.unit.trim(),
+        unitCost,
+        price,
+        available: form.available,
+      });
+    } catch {
+      // The parent displays the Supabase error and keeps the dialog open.
+    }
   };
 
   return (
@@ -140,7 +146,7 @@ export function StockFormDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Batal
             </Button>
-            <Button type="submit">Simpan</Button>
+            <Button type="submit" disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan'}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

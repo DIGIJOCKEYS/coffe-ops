@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
+import { DataState } from '@/components/shared/data-state';
+import { useAuth } from '@/components/layout/role-context';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -13,7 +15,9 @@ import { useToast } from '@/hooks/use-toast';
 import { usePagination } from '@/hooks/use-pagination';
 import { TablePagination } from '@/components/shared/table-pagination';
 import { formatNumber, formatRupiah } from '@/lib/format';
-import { shiftSales as initialSales, stockItems, type SalesLine, type Shift, type ShiftSales } from '@/lib/mock-data';
+import { createShiftSale, fetchShiftSales, fetchStockItems, todayJakarta } from '@/lib/operations-data';
+import type { SalesLine, Shift } from '@/types/operations';
+import { useSupabaseQuery } from '@/hooks/use-supabase-query';
 
 const SHIFTS: Shift[] = ['pagi-siang', 'siang-sore'];
 const SHIFT_LABEL: Record<Shift, string> = { 'pagi-siang': 'Pagi–Siang', 'siang-sore': 'Siang–Sore' };
@@ -21,28 +25,29 @@ const DATE_FORMAT = new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 's
 
 type DraftLine = { itemId: string; name: string; price: number; qty: number };
 
-const availableMenus = stockItems.filter((item) => item.available);
-
 function emptyLine(): DraftLine {
   return { itemId: '', name: '', price: 0, qty: 1 };
 }
 
 export default function SalesPage() {
   const { toast } = useToast();
-  const [records, setRecords] = useState<ShiftSales[]>(initialSales);
+  const { user, profile } = useAuth();
+  const { data: salesData, loading: salesLoading, error: salesError, refresh: refreshSales } = useSupabaseQuery(fetchShiftSales);
+  const { data: stockData, loading: stockLoading, error: stockError, refresh: refreshStock } = useSupabaseQuery(fetchStockItems);
+  const records = salesData ?? [];
+  const stockItems = stockData ?? [];
+  const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
 
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayJakarta());
   const [shift, setShift] = useState<Shift>('pagi-siang');
-  const [recordedBy, setRecordedBy] = useState('');
   const [notes, setNotes] = useState('');
   const [lines, setLines] = useState<DraftLine[]>([emptyLine()]);
   const [error, setError] = useState<string | null>(null);
 
   const resetForm = () => {
-    setDate(new Date().toISOString().slice(0, 10));
+    setDate(todayJakarta());
     setShift('pagi-siang');
-    setRecordedBy('');
     setNotes('');
     setLines([emptyLine()]);
     setError(null);
@@ -63,14 +68,16 @@ export default function SalesPage() {
 
   const draftTotal = lines.reduce((sum, line) => sum + (line.itemId ? line.qty * line.price : 0), 0);
 
-  const handleSubmit = () => {
+  const availableMenus = stockItems.filter((item) => item.available);
+
+  const handleSubmit = async () => {
     const validLines = lines.filter((line) => line.itemId && line.qty > 0);
     if (validLines.length === 0) {
       setError('Tambahkan minimal satu menu dengan jumlah lebih dari 0.');
       return;
     }
-    if (!recordedBy.trim()) {
-      setError('Nama pencatat wajib diisi.');
+    if (!user?.id) {
+      setError('Sesi pengguna tidak ditemukan. Silakan login kembali.');
       return;
     }
 
@@ -81,25 +88,26 @@ export default function SalesPage() {
       price: line.price,
     }));
     const total = salesLines.reduce((sum, line) => sum + line.qty * line.price, 0);
-    const id = `SLS-${String(Date.now()).slice(-6)}`;
-
-    const record: ShiftSales = {
-      id,
+    setSaving(true);
+    try {
+      await createShiftSale({
       date,
       shift,
-      lines: salesLines,
       total,
-      recordedBy: recordedBy.trim(),
       notes: notes.trim() || undefined,
-    };
-
-    setRecords((prev) => [record, ...prev]);
-    toast({
-      title: 'Penjualan shift tercatat',
-      description: `${SHIFT_LABEL[shift]} · ${formatRupiah(total)}`,
-    });
-    resetForm();
-    setOpen(false);
+      lines: salesLines,
+      userId: user.id,
+      userName: profile?.name ?? user.fullName ?? 'Pengguna',
+      });
+      await refreshSales();
+      toast({ title: 'Penjualan shift tercatat', description: `${SHIFT_LABEL[shift]} · ${formatRupiah(total)}` });
+      resetForm();
+      setOpen(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Gagal menyimpan penjualan.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const sorted = [...records].sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
@@ -119,6 +127,13 @@ export default function SalesPage() {
         }
       />
 
+      <DataState
+        loading={salesLoading || stockLoading}
+        error={salesError ?? stockError}
+        onRetry={() => { refreshSales(); refreshStock(); }}
+      />
+      {!salesLoading && !stockLoading && !salesError && !stockError && (
+      <>
       <div className="mb-4 flex items-center justify-between rounded-xl border border-line bg-white px-5 py-4 shadow-sm">
         <p className="text-sm font-medium text-ink-muted">Total omzet tercatat</p>
         <p className="text-xl font-bold text-ink">{formatRupiah(totalOmzet)}</p>
@@ -194,10 +209,7 @@ export default function SalesPage() {
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-ink-muted">Nama pencatat</Label>
-              <Input value={recordedBy} onChange={(e) => setRecordedBy(e.target.value)} placeholder="Nama yang mencatat" />
-            </div>
+            <p className="text-xs text-ink-muted">Pencatat: {profile?.name ?? user?.fullName ?? 'Pengguna yang login'}</p>
 
             <div className="space-y-2">
               <Label className="text-xs font-medium text-ink-muted">Rincian menu</Label>
@@ -261,10 +273,12 @@ export default function SalesPage() {
 
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setOpen(false)}>Batal</Button>
-            <Button onClick={handleSubmit}>Simpan</Button>
+            <Button onClick={handleSubmit} disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </>
+      )}
     </>
   );
 }

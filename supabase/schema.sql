@@ -133,15 +133,3 @@ create policy "allow_all_takes" on public.stock_takes for all using (true) with 
 
 drop policy if exists "allow_all_audit" on public.audit_entries;
 create policy "allow_all_audit" on public.audit_entries for all using (true) with check (true);
-
--- ============================================================
--- SEED DATA — Menu & Stok Awal
--- ============================================================
-insert into public.stock_items (name, category, stock, min_stock, unit, unit_cost, price, available) values
-  ('Kopi Susu Gula Aren', 'Signature', 24, 20, 'porsi', 6500, 22000, true),
-  ('Americano', 'Espresso', 41, 20, 'porsi', 4000, 18000, true),
-  ('Cafe Latte', 'Espresso', 33, 20, 'porsi', 8000, 24000, true),
-  ('Matcha Latte', 'Non-Kopi', 9, 15, 'porsi', 9500, 26000, true),
-  ('Cokelat Panas', 'Non-Kopi', 0, 10, 'porsi', 7000, 22000, false),
-  ('Espresso Tonic', 'Signature', 12, 15, 'porsi', 9000, 28000, true)
-on conflict (name) do nothing;

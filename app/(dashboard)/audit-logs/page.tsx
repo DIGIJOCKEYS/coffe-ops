@@ -2,11 +2,14 @@
 
 import { Clock3 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
+import { DataState } from '@/components/shared/data-state';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TablePagination } from '@/components/shared/table-pagination';
 import { usePagination } from '@/hooks/use-pagination';
-import { auditEntries, type AuditEntry } from '@/lib/mock-data';
+import { fetchAuditEntries } from '@/lib/operations-data';
+import { useSupabaseQuery } from '@/hooks/use-supabase-query';
+import type { AuditEntry } from '@/types/operations';
 
 const MODULE_STYLE: Record<string, string> = {
   'Ambil Barang': 'bg-brand/10 text-brand-dark',
@@ -16,7 +19,9 @@ const MODULE_STYLE: Record<string, string> = {
 };
 
 export default function AuditLogsPage() {
-  const sorted = [...auditEntries].sort((a, b) => a.time.localeCompare(b.time));
+  const { data: auditData, loading, error, refresh } = useSupabaseQuery(fetchAuditEntries);
+  const entries = auditData ?? [];
+  const sorted = entries;
   const { page, totalPages, paged, total, pageSize, setPage } = usePagination(sorted, 10);
 
   return (
@@ -26,6 +31,8 @@ export default function AuditLogsPage() {
         description="Linimasa aktivitas: ambil barang, penjualan, pengeluaran, dan perubahan stok."
       />
 
+      <DataState loading={loading} error={error} onRetry={refresh} />
+      {!loading && !error && (
       <div className="overflow-hidden rounded-xl border border-line bg-white shadow-sm">
         <div className="overflow-x-auto">
           <Table>
@@ -58,10 +65,7 @@ export default function AuditLogsPage() {
         </div>
         <TablePagination page={page} pageCount={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
       </div>
-
-      <p className="mt-3 text-xs text-ink-muted">
-        Catatan: data audit log bersifat contoh (prototype). Saat database tersambung, entri akan terisi otomatis dari aktivitas ambil barang, penjualan, dan pengeluaran.
-      </p>
+      )}
     </>
   );
 }

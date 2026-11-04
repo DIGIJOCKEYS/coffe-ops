@@ -3,6 +3,8 @@
 import { useState, type ChangeEvent } from 'react';
 import { Camera, ImageOff, Plus } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
+import { DataState } from '@/components/shared/data-state';
+import { useAuth } from '@/components/layout/role-context';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -15,8 +17,10 @@ import { useToast } from '@/hooks/use-toast';
 import { usePagination } from '@/hooks/use-pagination';
 import { TablePagination } from '@/components/shared/table-pagination';
 import { formatNumber } from '@/lib/format';
-import { stockItems as initialStock, stockTakes as initialTakes, type StockItem, type StockTake, type StockTakeKind } from '@/lib/mock-data';
+import { createStockTake, fetchStockItems, fetchStockTakes } from '@/lib/operations-data';
+import type { StockItem, StockTakeKind } from '@/types/operations';
 import { getStockStatus } from '@/lib/stock';
+import { useSupabaseQuery } from '@/hooks/use-supabase-query';
 
 const DT_FORMAT = new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -25,8 +29,12 @@ const KIND_STYLE: Record<StockTakeKind, string> = { pemakaian: 'bg-ink/5 text-in
 
 export default function StockTakesPage() {
   const { toast } = useToast();
-  const [items, setItems] = useState<StockItem[]>(initialStock);
-  const [records, setRecords] = useState<StockTake[]>(initialTakes);
+  const { user, profile } = useAuth();
+  const { data: stockData, loading: itemsLoading, error: itemsError, refresh: refreshItems } = useSupabaseQuery(fetchStockItems);
+  const { data: takeData, loading: takesLoading, error: takesError, refresh: refreshTakes } = useSupabaseQuery(fetchStockTakes);
+  const items = stockData ?? [];
+  const records = takeData ?? [];
+  const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
 
   const [itemId, setItemId] = useState('');
@@ -41,8 +49,16 @@ export default function StockTakesPage() {
   const handlePhoto = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (file.size > 1024 * 1024) {
+      setError('Ukuran foto maksimal 1 MB.');
+      event.target.value = '';
+      return;
+    }
     const reader = new FileReader();
-    reader.onload = () => setPhoto(reader.result as string);
+    reader.onload = () => {
+      if (typeof reader.result === 'string') setPhoto(reader.result);
+    };
+    reader.onerror = () => setError('Foto gagal dibaca. Coba pilih file lain.');
     reader.readAsDataURL(file);
   };
 
@@ -57,7 +73,7 @@ export default function StockTakesPage() {
     setError(null);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const item = items.find((i) => i.id === itemId);
     const qtyNum = Number(qty);
 
@@ -65,11 +81,11 @@ export default function StockTakesPage() {
       setError('Pilih item yang diambil.');
       return;
     }
-    if (Number.isNaN(qtyNum) || qtyNum <= 0) {
+    if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
       setError('Jumlah harus lebih dari 0.');
       return;
     }
-    if (!staffName.trim()) {
+    if (!(profile?.name ?? staffName).trim()) {
       setError('Nama wajib diisi untuk pelacakan audit.');
       return;
     }
@@ -78,34 +94,35 @@ export default function StockTakesPage() {
       return;
     }
 
-    const now = new Date();
-    const id = `TK-${String(Date.now()).slice(-6)}`;
-    const record: StockTake = {
-      id,
-      datetime: now.toISOString(),
+    if (!user?.id) {
+      setError('Sesi pengguna tidak ditemukan. Silakan login kembali.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await createStockTake({
       itemId: item.id,
       itemName: item.name,
       qty: qtyNum,
       kind,
       reason: kind === 'rusak' ? reason.trim() : undefined,
-      staffName: staffName.trim(),
+      staffName: profile?.name ?? staffName.trim(),
       photo,
       notes: notes.trim() || undefined,
-    };
-
-    setRecords((prev) => [record, ...prev]);
-    setItems((prev) =>
-      prev.map((i) => (i.id === item.id ? { ...i, stock: Math.max(0, i.stock - qtyNum) } : i)),
-    );
-    toast({
-      title: kind === 'rusak' ? 'Kerugian stok tercatat' : 'Ambil barang tercatat',
-      description:
-        kind === 'rusak'
-          ? `${formatNumber(qtyNum)} ${item.unit} ${item.name} rusak — ${reason.trim()}`
-          : `${formatNumber(qtyNum)} ${item.unit} ${item.name} oleh ${staffName.trim()}`,
-    });
-    resetForm();
-    setOpen(false);
+      }, user.id);
+      await Promise.all([refreshItems(), refreshTakes()]);
+      toast({
+        title: kind === 'rusak' ? 'Kerugian stok tercatat' : 'Ambil barang tercatat',
+        description: `${formatNumber(qtyNum)} ${item.unit} ${item.name} oleh ${profile?.name ?? staffName.trim()}`,
+      });
+      resetForm();
+      setOpen(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Gagal mencatat pengambilan stok.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const sorted = [...records].sort((a, b) => b.datetime.localeCompare(a.datetime));
@@ -125,6 +142,13 @@ export default function StockTakesPage() {
         }
       />
 
+      <DataState
+        loading={itemsLoading || takesLoading}
+        error={itemsError ?? takesError}
+        onRetry={() => { refreshItems(); refreshTakes(); }}
+      />
+      {!itemsLoading && !takesLoading && !itemsError && !takesError && (
+      <>
       <div className="overflow-hidden rounded-xl border border-line bg-white shadow-sm">
         {sorted.length === 0 ? (
           <div className="px-6 py-16 text-center">
@@ -235,7 +259,7 @@ export default function StockTakesPage() {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-ink-muted">Nama staff</Label>
-                <Input value={staffName} onChange={(e) => setStaffName(e.target.value)} placeholder="Nama pencatat" />
+                <Input value={profile?.name ?? staffName} onChange={(e) => setStaffName(e.target.value)} placeholder="Nama pencatat" disabled={Boolean(profile?.name)} />
               </div>
             </div>
 
@@ -259,7 +283,7 @@ export default function StockTakesPage() {
                   <img src={photo} alt="Pratinjau bukti" className="h-12 w-12 rounded-md object-cover ring-1 ring-line" />
                 )}
               </div>
-              <p className="text-[11px] text-ink-muted">Foto tersimpan sementara (prototype). Akan diupload permanen saat database tersambung.</p>
+              <p className="text-[11px] text-ink-muted">Foto akan disimpan bersama catatan stok.</p>
             </div>
 
             {kind === 'pemakaian' && (
@@ -274,10 +298,12 @@ export default function StockTakesPage() {
 
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setOpen(false)}>Batal</Button>
-            <Button onClick={handleSubmit}>Simpan</Button>
+            <Button onClick={handleSubmit} disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </>
+      )}
     </>
   );
 }

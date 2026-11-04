@@ -1,17 +1,12 @@
 import ExcelJS from 'exceljs';
 import { aggregateSalesByItem, summarizeToday } from '@/lib/metrics';
 import { getStockStatus } from '@/lib/stock';
+import { fetchReportData, todayJakarta } from '@/lib/operations-data';
 import {
-  expenses,
-  shiftSales,
-  stockItems,
-  stockTakes,
   type ExpenseCategory,
   type Shift,
-} from '@/lib/mock-data';
+} from '@/types/operations';
 
-const TODAY = '2026-11-03';
-const PERIOD = '3 November 2026';
 const SHIFT_LABEL: Record<Shift, string> = { 'pagi-siang': 'Pagi–Siang', 'siang-sore': 'Siang–Sore' };
 const EXPENSE_CATEGORIES: ExpenseCategory[] = ['Pembelian Stok', 'Operasional', 'Lainnya'];
 const RUPIAH_FMT = '"Rp"#,##0';
@@ -43,19 +38,22 @@ function rupiahCell(ws: ExcelJS.Worksheet, row: number, col: number, value: numb
 }
 
 async function buildWorkbook(): Promise<ExcelJS.Workbook> {
+  const { expenses, shiftSales, stockItems, stockTakes } = await fetchReportData();
+  const today = todayJakarta();
+  const todayExpenses = expenses.filter((expense) => expense.date === today);
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Coffee Ops';
   wb.created = new Date();
 
-  const todaySales = shiftSales.filter((shift) => shift.date === TODAY);
-  const summary = summarizeToday(todaySales, stockItems, expenses);
+  const todaySales = shiftSales.filter((shift) => shift.date === today);
+  const summary = summarizeToday(todaySales, stockItems, todayExpenses);
 
   // ---- Sheet 1: Ringkasan ----
   const ringkasan = wb.addWorksheet('Ringkasan', { properties: { defaultColWidth: 28 } });
   ringkasan.columns = [{ width: 26 }, { width: 22 }];
   ringkasan.addRow(['Coffee Ops — Laporan Operasional']);
   ringkasan.getCell('A1').font = { bold: true, size: 16, color: { argb: BRAND } };
-  ringkasan.addRow([`Periode: ${PERIOD}`]);
+  ringkasan.addRow([`Periode: ${new Intl.DateTimeFormat('id-ID', { dateStyle: 'long', timeZone: 'Asia/Jakarta' }).format(new Date(`${today}T12:00:00+07:00`))}`]);
   ringkasan.getCell('A2').font = { italic: true, color: { argb: 'FF777777' } };
   ringkasan.addRow([]);
   ringkasan.addRow(['Metrik', 'Nilai']);
@@ -181,7 +179,7 @@ export async function exportReportToExcel() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `Laporan-CoffeeOps-${TODAY}.xlsx`;
+  link.download = `Laporan-CoffeeOps-${todayJakarta()}.xlsx`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

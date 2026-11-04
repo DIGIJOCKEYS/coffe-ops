@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Check } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
+import { DataState } from '@/components/shared/data-state';
+import { useAuth } from '@/components/layout/role-context';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,18 +13,27 @@ import { useToast } from '@/hooks/use-toast';
 import { usePagination } from '@/hooks/use-pagination';
 import { TablePagination } from '@/components/shared/table-pagination';
 import { formatNumber } from '@/lib/format';
-import { stockItems as initialItems, type StockItem } from '@/lib/mock-data';
+import { fetchStockItems, saveStockCounts } from '@/lib/operations-data';
+import type { StockItem } from '@/types/operations';
+import { useSupabaseQuery } from '@/hooks/use-supabase-query';
 
 export default function StockOpnamePage() {
   const { toast } = useToast();
-  const [items, setItems] = useState<StockItem[]>(initialItems);
-  const [counts, setCounts] = useState<Record<string, string>>(() =>
-    Object.fromEntries(initialItems.map((item) => [item.id, String(item.stock)])),
-  );
+  const { user, profile } = useAuth();
+  const { data: stockData, loading, error: loadError, refresh } = useSupabaseQuery(fetchStockItems);
+  const items = useMemo(() => stockData ?? [], [stockData]);
+  const [counts, setCounts] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setCounts(Object.fromEntries(items.map((item) => [item.id, String(item.stock)])));
+  }, [items]);
 
   const rows = items.map((item) => {
-    const fisik = Number(counts[item.id]);
-    const valid = !Number.isNaN(fisik);
+    const rawCount = counts[item.id];
+    const fisik = Number(rawCount);
+    const valid = rawCount !== undefined && rawCount !== '' && Number.isFinite(fisik) && fisik >= 0;
     const selisih = valid ? fisik - item.stock : 0;
     return { item, fisik: valid ? fisik : 0, valid, selisih };
   });
@@ -33,16 +44,31 @@ export default function StockOpnamePage() {
   const hasInvalid = rows.some((row) => !row.valid);
   const { page, totalPages, paged, total, pageSize, setPage } = usePagination(rows, 10);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (hasInvalid) return;
-    setItems((prev) => prev.map((item) => ({ ...item, stock: Number(counts[item.id]) || 0 })));
-    if (lebih === 0 && kurang === 0) {
-      toast({ title: 'Stok sesuai', description: 'Tidak ada selisih. Semua stok fisik cocok dengan tercatat.' });
-    } else {
-      toast({
-        title: 'Opname disimpan',
-        description: `${lebih + kurang} item disesuaikan · ${lebih} lebih, ${kurang} kurang. Selisih tercatat untuk audit.`,
-      });
+    if (!user?.id) {
+      setSaveError('Sesi pengguna tidak ditemukan. Silakan login kembali.');
+      return;
+    }
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await saveStockCounts(
+        rows.map(({ item, fisik }) => ({ id: item.id, name: item.name, before: item.stock, after: fisik })),
+        user.id,
+        profile?.name ?? user.fullName ?? 'Pengguna',
+      );
+      await refresh();
+      if (lebih === 0 && kurang === 0) {
+        toast({ title: 'Stok sesuai', description: 'Tidak ada selisih. Semua stok fisik cocok dengan tercatat.' });
+      } else {
+        toast({ title: 'Opname disimpan', description: `${lebih + kurang} item disesuaikan · ${lebih} lebih, ${kurang} kurang.` });
+      }
+    } catch (cause) {
+      setSaveError(cause instanceof Error ? cause.message : 'Gagal menyimpan stock opname.');
+      await refresh();
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -52,13 +78,17 @@ export default function StockOpnamePage() {
         title="Stock Opname"
         description="Hitung ulang stok fisik, bandingkan dengan yang tercatat, lalu simpan. Selisih tercatat untuk audit."
         actions={
-          <Button onClick={handleSave} disabled={hasInvalid}>
+          <Button onClick={handleSave} disabled={hasInvalid || saving}>
             <Check className="h-4 w-4" />
-            Simpan Opname
+            {saving ? 'Menyimpan...' : 'Simpan Opname'}
           </Button>
         }
       />
 
+      <DataState loading={loading} error={loadError} onRetry={refresh} />
+      {saveError && <p className="mb-3 text-sm text-red-700">{saveError}</p>}
+      {!loading && !loadError && (
+      <>
       <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <SummaryTile label="Total item" value={formatNumber(rows.length)} />
         <SummaryTile label="Tepat" value={formatNumber(tepat)} tone="emerald" />
@@ -117,8 +147,10 @@ export default function StockOpnamePage() {
       </div>
 
       <p className="mt-3 text-xs text-ink-muted">
-        Catatan: penyimpanan opname saat ini berlaku pada sesi ini (prototype). Saat database tersambung, selisih akan tercatat otomatis di Audit Log dan memperbarui stok yang disharing dengan halaman Stok & Menu.
+        Perubahan disimpan ke Supabase dan selisihnya dicatat pada Audit Log.
       </p>
+      </>
+      )}
     </>
   );
 }

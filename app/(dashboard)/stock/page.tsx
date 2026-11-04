@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { Eye, Pencil, Plus, Search } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
-import { useRole } from '@/components/layout/role-context';
+import { DataState } from '@/components/shared/data-state';
+import { useAuth, useRole } from '@/components/layout/role-context';
 import { StockDetailSheet } from '@/components/stock/stock-detail-sheet';
 import { StockFormDialog } from '@/components/stock/stock-form-dialog';
 import { Badge } from '@/components/ui/badge';
@@ -16,9 +17,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { formatNumber, formatRupiah } from '@/lib/format';
-import { stockItems as initialItems, type StockItem, type StockItemInput, type StockStatus } from '@/lib/mock-data';
+import type { StockItem, StockItemInput, StockStatus } from '@/types/operations';
+import { fetchStockItems, saveStockItem } from '@/lib/operations-data';
 import { getStockStatus } from '@/lib/stock';
 import { cn } from '@/lib/utils';
+import { useSupabaseQuery } from '@/hooks/use-supabase-query';
 
 const STATUS_OPTIONS: { value: 'all' | StockStatus; label: string }[] = [
   { value: 'all', label: 'Semua status' },
@@ -30,8 +33,12 @@ const STATUS_OPTIONS: { value: 'all' | StockStatus; label: string }[] = [
 
 export default function StockPage() {
   const { role } = useRole();
+  const { user, profile } = useAuth();
   const { toast } = useToast();
-  const [items, setItems] = useState<StockItem[]>(initialItems);
+  const { data: stockData, loading, error: loadError, refresh } = useSupabaseQuery(fetchStockItems);
+  const items = stockData ?? [];
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
   const [status, setStatus] = useState<'all' | StockStatus>('all');
@@ -64,16 +71,21 @@ export default function StockPage() {
     setFormOpen(true);
   };
 
-  const handleSave = (input: StockItemInput) => {
-    if (editTarget) {
-      setItems((prev) => prev.map((item) => (item.id === editTarget.id ? { ...item, ...input } : item)));
-      toast({ title: 'Stok & menu diperbarui', description: input.name });
-    } else {
-      const id = `STK-${String(Date.now()).slice(-6)}`;
-      setItems((prev) => [...prev, { id, ...input }]);
-      toast({ title: 'Stok & menu ditambahkan', description: input.name });
+  const handleSave = async (input: StockItemInput) => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      if (!user?.id) throw new Error('Sesi pengguna tidak ditemukan. Silakan login kembali.');
+      await saveStockItem(input, user.id, profile?.name ?? user.fullName ?? 'Pengguna', editTarget?.id);
+      await refresh();
+      toast({ title: editTarget ? 'Stok & menu diperbarui' : 'Stok & menu ditambahkan', description: input.name });
+      setFormOpen(false);
+    } catch (cause) {
+      setSaveError(cause instanceof Error ? cause.message : 'Gagal menyimpan stok.');
+      throw cause;
+    } finally {
+      setSaving(false);
     }
-    setFormOpen(false);
   };
 
   return (
@@ -91,6 +103,9 @@ export default function StockPage() {
         }
       />
 
+      <DataState loading={loading} error={loadError} onRetry={refresh} />
+      {saveError && <p className="mb-3 text-sm text-red-700">{saveError}</p>}
+      {!loading && !loadError && (
       <div className="overflow-hidden rounded-xl border border-line bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-line p-4 md:flex-row md:items-center">
           <div className="relative flex-1">
@@ -199,6 +214,7 @@ export default function StockPage() {
         )}
         <TablePagination page={page} pageCount={totalPages} total={total} pageSize={pageSize} onPageChange={setPage} />
       </div>
+      )}
 
       <StockDetailSheet
         item={detailItem}
@@ -215,6 +231,7 @@ export default function StockPage() {
           initial={editTarget}
           categories={categories}
           onSubmit={handleSave}
+          saving={saving}
         />
       )}
     </>

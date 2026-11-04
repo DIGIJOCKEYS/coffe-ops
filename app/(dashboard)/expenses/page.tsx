@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
+import { DataState } from '@/components/shared/data-state';
+import { useAuth } from '@/components/layout/role-context';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -14,7 +16,9 @@ import { useToast } from '@/hooks/use-toast';
 import { usePagination } from '@/hooks/use-pagination';
 import { TablePagination } from '@/components/shared/table-pagination';
 import { formatRupiah } from '@/lib/format';
-import { expenses as initialExpenses, type Expense, type ExpenseCategory } from '@/lib/mock-data';
+import { createExpense, fetchExpenses, todayJakarta } from '@/lib/operations-data';
+import type { ExpenseCategory } from '@/types/operations';
+import { useSupabaseQuery } from '@/hooks/use-supabase-query';
 
 const CATEGORIES: ExpenseCategory[] = ['Pembelian Stok', 'Operasional', 'Lainnya'];
 
@@ -28,40 +32,57 @@ const DATE_FORMAT = new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 's
 
 export default function ExpensesPage() {
   const { toast } = useToast();
-  const [records, setRecords] = useState<Expense[]>(initialExpenses);
+  const { user, profile } = useAuth();
+  const { data: expenseData, loading, error: loadError, refresh } = useSupabaseQuery(fetchExpenses);
+  const records = expenseData ?? [];
+  const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
 
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayJakarta());
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<ExpenseCategory>('Operasional');
   const [amount, setAmount] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const resetForm = () => {
-    setDate(new Date().toISOString().slice(0, 10));
+    setDate(todayJakarta());
     setDescription('');
     setCategory('Operasional');
     setAmount('');
     setError(null);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const amountNum = Number(amount);
     if (!description.trim()) {
       setError('Deskripsi wajib diisi.');
       return;
     }
-    if (Number.isNaN(amountNum) || amountNum <= 0) {
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
       setError('Jumlah harus berupa angka lebih dari 0.');
       return;
     }
 
-    const id = `EXP-${String(Date.now()).slice(-6)}`;
-    const record: Expense = { id, date, description: description.trim(), category, amount: amountNum };
-    setRecords((prev) => [record, ...prev]);
-    toast({ title: 'Pengeluaran tercatat', description: `${formatRupiah(amountNum)} — ${description.trim()}` });
-    resetForm();
-    setOpen(false);
+    if (!user?.id) {
+      setError('Sesi pengguna tidak ditemukan. Silakan login kembali.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await createExpense(
+        { date, description: description.trim(), category, amount: amountNum },
+        user.id,
+        profile?.name ?? user.fullName ?? 'Pengguna',
+      );
+      await refresh();
+      toast({ title: 'Pengeluaran tercatat', description: `${formatRupiah(amountNum)} — ${description.trim()}` });
+      resetForm();
+      setOpen(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Gagal menyimpan pengeluaran.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const sorted = [...records].sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
@@ -81,6 +102,9 @@ export default function ExpensesPage() {
         }
       />
 
+      <DataState loading={loading} error={loadError} onRetry={refresh} />
+      {!loading && !loadError && (
+      <>
       <div className="mb-4 flex items-center justify-between rounded-xl border border-line bg-white px-5 py-4 shadow-sm">
         <p className="text-sm font-medium text-ink-muted">Total pengeluaran tercatat</p>
         <p className="text-xl font-bold text-ink">{formatRupiah(total)}</p>
@@ -159,10 +183,12 @@ export default function ExpensesPage() {
 
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setOpen(false)}>Batal</Button>
-            <Button onClick={handleSubmit}>Simpan</Button>
+            <Button onClick={handleSubmit} disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </>
+      )}
     </>
   );
 }

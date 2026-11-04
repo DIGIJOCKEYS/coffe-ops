@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { Download, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { exportReportToExcel } from '@/lib/export-report';
 
 export function ReportToolbar() {
   const { toast } = useToast();
@@ -13,10 +12,14 @@ export function ReportToolbar() {
   const handleExport = async () => {
     setLoading(true);
     try {
+      const { exportReportToExcel } = await import('@/lib/export-report');
       await exportReportToExcel();
       toast({ title: 'Laporan diunduh', description: 'File Excel siap dicetak.' });
-    } catch {
-      toast({ title: 'Gagal mengunduh', description: 'Terjadi kesalahan saat membuat file Excel.' });
+    } catch (error) {
+      toast({
+        title: 'Gagal mengunduh',
+        description: error instanceof Error ? error.message : 'Terjadi kesalahan saat membuat file Excel.',
+      });
     } finally {
       setLoading(false);
     }

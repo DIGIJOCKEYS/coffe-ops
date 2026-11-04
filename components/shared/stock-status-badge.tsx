@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import type { StockStatus } from '@/lib/mock-data';
+import type { StockStatus } from '@/types/operations';
 
 const STATUS_STYLES: Record<StockStatus, { label: string; className: string }> = {
   aman: { label: 'Aman', className: 'bg-emerald-50 text-emerald-700 ring-emerald-600/15' },

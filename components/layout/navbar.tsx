@@ -1,18 +1,16 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Bell, Menu } from 'lucide-react';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useToast } from '@/hooks/use-toast';
 import { UserButton } from '@clerk/nextjs';
 import { useRole } from '@/components/layout/role-context';
 import { findNavGroupTitle, findNavItem } from '@/lib/nav-config';
-import { notifications as initialNotifications } from '@/lib/mock-data';
-import { cn } from '@/lib/utils';
+import { fetchRecentAuditEntries } from '@/lib/operations-data';
+import { useSupabaseQuery } from '@/hooks/use-supabase-query';
 
 export function Navbar({ onOpenMobileMenu }: { onOpenMobileMenu: () => void }) {
   return (
@@ -71,50 +69,32 @@ function NavBreadcrumb() {
 }
 
 function NotificationMenu() {
-  const [items, setItems] = useState(initialNotifications);
-  const { toast } = useToast();
-  const unreadCount = items.filter((item) => !item.read).length;
-
-  const markAllRead = () => {
-    setItems((prev) => prev.map((item) => ({ ...item, read: true })));
-    toast({ title: 'Semua notifikasi ditandai dibaca' });
-  };
+  const { data: auditData } = useSupabaseQuery(fetchRecentAuditEntries);
+  const items = auditData ?? [];
 
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative" aria-label="Notifikasi">
+        <Button variant="ghost" size="icon" className="relative" aria-label="Aktivitas terbaru">
           <Bell className="h-5 w-5" />
-          {unreadCount > 0 && (
-            <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold text-white ring-2 ring-white">
-              {unreadCount}
-            </span>
-          )}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0">
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
-          <p className="text-sm font-semibold text-ink">Notifikasi</p>
-          <button
-            type="button"
-            onClick={markAllRead}
-            disabled={unreadCount === 0}
-            className="text-xs font-medium text-brand transition-colors hover:text-brand-dark disabled:text-ink-muted"
-          >
-            Tandai semua dibaca
-          </button>
+          <p className="text-sm font-semibold text-ink">Aktivitas terbaru</p>
         </div>
         <ul className="max-h-80 divide-y divide-line overflow-y-auto">
           {items.map((item) => (
             <li key={item.id} className="flex gap-3 px-4 py-3 transition-colors hover:bg-background">
-              <span className={cn('mt-1.5 h-2 w-2 shrink-0 rounded-full', item.read ? 'bg-transparent' : 'bg-brand')} />
+              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand" />
               <div className="min-w-0">
-                <p className="text-sm font-medium text-ink">{item.title}</p>
-                <p className="text-xs text-ink-muted">{item.description}</p>
+                <p className="text-sm font-medium text-ink">{item.action}</p>
+                <p className="text-xs text-ink-muted">{item.user} · {item.module}</p>
                 <p className="mt-1 text-[11px] text-ink-muted">{item.time}</p>
               </div>
             </li>
           ))}
+          {items.length === 0 && <li className="px-4 py-5 text-sm text-ink-muted">Belum ada aktivitas.</li>}
         </ul>
       </PopoverContent>
     </Popover>

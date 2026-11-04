@@ -5,7 +5,7 @@ import { StockStatusBadge } from '@/components/shared/stock-status-badge';
 import { formatNumber, formatRupiah } from '@/lib/format';
 import { aggregateSalesByItem } from '@/lib/metrics';
 import { getStockStatus } from '@/lib/stock';
-import type { AuditEntry, Shift, ShiftSales, StockItem } from '@/lib/mock-data';
+import type { AuditEntry, Shift, ShiftSales, StockItem } from '@/types/operations';
 import { cn } from '@/lib/utils';
 
 const VIEW_ALL_LINK = 'text-xs font-medium text-brand transition-colors hover:text-brand-dark';

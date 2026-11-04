@@ -7,7 +7,7 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { StockStatusBadge } from '@/components/shared/stock-status-badge';
 import { formatNumber, formatRupiah } from '@/lib/format';
 import { getStockStatus } from '@/lib/stock';
-import type { StockItem } from '@/lib/mock-data';
+import type { StockItem } from '@/types/operations';
 
 export function StockDetailSheet({
   item,

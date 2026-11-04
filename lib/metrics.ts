@@ -1,4 +1,4 @@
-import type { DailySales, Expense, ShiftSales, StockItem } from '@/lib/mock-data';
+import type { DailySales, Expense, ShiftSales, StockItem } from '@/types/operations';
 
 // Omzet dari penjualan shift yang diberikan.
 export function sumShiftTotal(sales: ShiftSales[]): number {

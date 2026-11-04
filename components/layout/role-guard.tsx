@@ -8,12 +8,24 @@ import { canAccess, findNavItem } from '@/lib/nav-config';
 
 export function RoleGuard({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { role, loading } = useAuth();
+  const { role, loading, error } = useAuth();
 
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-line border-t-brand" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center text-center">
+        <h1 className="text-lg font-semibold text-ink">Profil belum dapat dimuat</h1>
+        <p className="mt-2 max-w-lg text-sm text-ink-muted">{error}</p>
+        <p className="mt-1 max-w-lg text-sm text-ink-muted">
+          Periksa koneksi Supabase dan kebijakan akses tabel profiles, lalu muat ulang halaman.
+        </p>
       </div>
     );
   }

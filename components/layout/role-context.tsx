@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useUser, useClerk } from '@clerk/nextjs';
 import { createClient } from '@/lib/supabase/client';
 import type { Role } from '@/lib/nav-config';
@@ -11,97 +11,108 @@ type AuthContextValue = {
   user: any;
   profile: Profile | null;
   loading: boolean;
+  error: string | null;
   role: Role;
   signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function isRole(value: unknown): value is Role {
+  return value === 'admin' || value === 'staff';
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
+  const userId = user?.id;
+  const fullName = user?.fullName;
+  const firstName = user?.firstName;
+  const emailAddress = user?.primaryEmailAddress?.emailAddress;
+  const avatarUrl = user?.imageUrl || null;
+  const metadataRole = user?.publicMetadata?.role;
   const [profile, setProfile] = useState<Profile | null>(null);
-  const syncedUserIdRef = useRef<string | null>(null);
+  const [profileUserId, setProfileUserId] = useState<string | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isLoaded || !user) {
-      setProfile(null);
-      syncedUserIdRef.current = null;
-      return;
-    }
+    if (!isLoaded) return;
 
-    // Hindari re-sync berulang kali jika user ID sama
-    if (syncedUserIdRef.current === user.id) {
+    if (!userId) {
+      setProfile(null);
+      setProfileUserId(null);
+      setProfileLoading(false);
+      setError(null);
       return;
     }
-    syncedUserIdRef.current = user.id;
 
     let isMounted = true;
     const syncProfileWithSupabase = async () => {
-      const supabase = createClient();
+      setProfileLoading(true);
+      setError(null);
+      setProfile(null);
+      setProfileUserId(null);
       const displayName =
-        user.fullName ||
-        user.firstName ||
-        user.primaryEmailAddress?.emailAddress?.split('@')[0] ||
+        fullName ||
+        firstName ||
+        emailAddress?.split('@')[0] ||
         'Pengguna';
-      const email = user.primaryEmailAddress?.emailAddress || '';
-      const avatarUrl = user.imageUrl || null;
+      const email = emailAddress || '';
 
       try {
+        const supabase = createClient();
         // Cek profil di tabel Supabase
         const { data, error } = await supabase
           .from('profiles')
           .select('id, name, role')
-          .eq('id', user.id)
+          .eq('id', userId)
           .maybeSingle();
 
         if (error) {
-          if (isMounted) {
-            setProfile({
-              name: displayName,
-              role: (user.publicMetadata?.role as Role) || 'admin',
-            });
-          }
-          return;
+          throw error;
         }
 
         if (data) {
           if (isMounted) {
             setProfile({
               name: data.name || displayName,
-              role: (data.role as Role) || 'staff',
+              role: isRole(data.role) ? data.role : 'staff',
             });
+            setProfileUserId(userId);
           }
         } else {
-          // Pengguna baru -> cek apakah ini pengguna pertama untuk jadikan admin
-          const { count } = await supabase
+          const { count, error: countError } = await supabase
             .from('profiles')
             .select('*', { count: 'exact', head: true });
+          if (countError) throw countError;
 
-          const defaultRole: Role =
-            (user.publicMetadata?.role as Role) || (count === 0 ? 'admin' : 'staff');
+          const defaultRole: Role = isRole(metadataRole) ? metadataRole : count === 0 ? 'admin' : 'staff';
 
-          await supabase.from('profiles').insert({
-            id: user.id,
+          const { error: insertError } = await supabase.from('profiles').insert({
+            id: userId,
             name: displayName,
             email,
             avatar_url: avatarUrl,
             role: defaultRole,
           });
+          if (insertError) throw insertError;
 
           if (isMounted) {
             setProfile({
               name: displayName,
               role: defaultRole,
             });
+            setProfileUserId(userId);
           }
         }
-      } catch {
+      } catch (error) {
         if (isMounted) {
-          setProfile({
-            name: displayName,
-            role: (user.publicMetadata?.role as Role) || 'admin',
-          });
+          setError(error instanceof Error ? error.message : 'Gagal memuat profil pengguna dari Supabase.');
+        }
+      } finally {
+        if (isMounted) {
+          setProfileLoading(false);
         }
       }
     };
@@ -111,14 +122,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       isMounted = false;
     };
-  }, [isLoaded, user?.id]);
+  }, [
+    isLoaded,
+    userId,
+    fullName,
+    firstName,
+    emailAddress,
+    avatarUrl,
+    metadataRole,
+  ]);
 
-  const activeRole: Role = profile?.role || (user?.publicMetadata?.role as Role) || 'admin';
+  const activeRole: Role = profile?.role || (isRole(metadataRole) ? metadataRole : 'staff');
 
   const value: AuthContextValue = {
     user: user ?? null,
     profile,
-    loading: !isLoaded,
+    loading: !isLoaded || (!!user && (profileLoading || profileUserId !== user.id)),
+    error,
     role: activeRole,
     signOut: async () => {
       await signOut();

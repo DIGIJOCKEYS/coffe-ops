@@ -3,7 +3,7 @@
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { CardShell } from '@/components/shared/card-shell';
 import { formatCompactRupiah, formatRupiah } from '@/lib/format';
-import type { DailySales, MonthlySales } from '@/lib/mock-data';
+import type { DailySales, MonthlySales } from '@/types/operations';
 
 const AXIS_STYLE = { fontSize: 12, fill: '#777777' };
 

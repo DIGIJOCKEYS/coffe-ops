@@ -1,25 +1,36 @@
+'use client';
+
 import { CardShell } from '@/components/shared/card-shell';
 import { StockStatusBadge } from '@/components/shared/stock-status-badge';
 import { PageHeader } from '@/components/layout/page-header';
+import { DataState } from '@/components/shared/data-state';
 import { ReportToolbar } from '@/components/reports/report-toolbar';
 import { formatNumber, formatRupiah } from '@/lib/format';
 import { aggregateSalesByItem, summarizeToday } from '@/lib/metrics';
 import { getStockStatus } from '@/lib/stock';
-import { expenses, shiftSales, stockItems, stockTakes, type ExpenseCategory, type Shift } from '@/lib/mock-data';
+import { fetchReportData, todayJakarta } from '@/lib/operations-data';
+import { useSupabaseQuery } from '@/hooks/use-supabase-query';
+import type { ExpenseCategory, Shift } from '@/types/operations';
 import { cn } from '@/lib/utils';
 
-const TODAY = '2026-11-03';
 const SHIFT_LABEL: Record<Shift, string> = { 'pagi-siang': 'Pagi–Siang', 'siang-sore': 'Siang–Sore' };
 
 const EXPENSE_CATEGORIES: ExpenseCategory[] = ['Pembelian Stok', 'Operasional', 'Lainnya'];
 
 export default function ReportsPage() {
-  const todaySales = shiftSales.filter((shift) => shift.date === TODAY);
-  const summary = summarizeToday(todaySales, stockItems, expenses);
+  const { data, loading, error, refresh } = useSupabaseQuery(fetchReportData);
+  const expenses = data?.expenses ?? [];
+  const shiftSales = data?.shiftSales ?? [];
+  const stockItems = data?.stockItems ?? [];
+  const stockTakes = data?.stockTakes ?? [];
+  const today = todayJakarta();
+  const todaySales = shiftSales.filter((shift) => shift.date === today);
+  const todayExpenses = expenses.filter((expense) => expense.date === today);
+  const summary = summarizeToday(todaySales, stockItems, todayExpenses);
 
   const expenseByCategory = EXPENSE_CATEGORIES.map((category) => ({
     category,
-    total: expenses.filter((expense) => expense.category === category).reduce((sum, expense) => sum + expense.amount, 0),
+    total: todayExpenses.filter((expense) => expense.category === category).reduce((sum, expense) => sum + expense.amount, 0),
   }));
 
   const statusCounts = stockItems.reduce(
@@ -44,10 +55,12 @@ export default function ReportsPage() {
     <>
       <PageHeader
         title="Laporan"
-        description={`Ringkasan operasional, 3 November 2026.`}
+        description={`Ringkasan operasional, ${new Intl.DateTimeFormat('id-ID', { dateStyle: 'long', timeZone: 'Asia/Jakarta' }).format(new Date(`${today}T12:00:00+07:00`))}.`}
         actions={<ReportToolbar />}
       />
 
+      <DataState loading={loading} error={error} onRetry={refresh} />
+      {!loading && !error && (
       <div className="space-y-6">
         {/* Ringkasan keuangan */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -155,6 +168,7 @@ export default function ReportsPage() {
           </CardShell>
         </div>
       </div>
+      )}
     </>
   );
 }

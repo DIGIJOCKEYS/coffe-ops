@@ -1,4 +1,4 @@
-import type { StockItem, StockStatus } from '@/lib/mock-data';
+import type { StockItem, StockStatus } from '@/types/operations';
 
 export function getStockStatus(item: Pick<StockItem, 'stock' | 'minStock'>): StockStatus {
   if (item.stock <= 0) return 'habis';
