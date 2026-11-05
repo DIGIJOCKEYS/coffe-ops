@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Building2, ImageIcon, Loader2, Save, Upload } from 'lucide-react';
+import { Building2, Camera, ImageIcon, Loader2, Save } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/components/layout/role-context';
 import { createClient } from '@/lib/supabase/client';
+import { invalidateBusinessSettingsCache } from '@/hooks/use-business-settings';
 
 type BusinessSettings = {
   id: string;
@@ -36,10 +37,9 @@ export default function BusinessPage() {
 
   useEffect(() => {
     let active = true;
-    const supabase = createClient();
-
     const load = async () => {
       try {
+        const supabase = createClient();
         const { data } = await supabase
           .from('business_settings')
           .select('*')
@@ -58,7 +58,6 @@ export default function BusinessPage() {
         if (active) setLoading(false);
       }
     };
-
     load();
     return () => { active = false; };
   }, []);
@@ -73,6 +72,8 @@ export default function BusinessPage() {
     const url = URL.createObjectURL(file);
     if (type === 'logo') { setLogoFile(file); setLogoPreview(url); }
     else { setBgFile(file); setBgPreview(url); }
+    // Reset input agar file yang sama bisa dipilih ulang
+    e.target.value = '';
   };
 
   const handleSave = async () => {
@@ -94,6 +95,7 @@ export default function BusinessPage() {
           .upload(`logo-${user.id}`, logoFile, { upsert: true });
         if (error) throw new Error(error.message);
         logoUrl = supabase.storage.from('business').getPublicUrl(`logo-${user.id}`).data.publicUrl;
+        setLogoFile(null);
       }
 
       if (bgFile) {
@@ -102,6 +104,7 @@ export default function BusinessPage() {
           .upload(`background-${user.id}`, bgFile, { upsert: true });
         if (error) throw new Error(error.message);
         bgUrl = supabase.storage.from('business').getPublicUrl(`background-${user.id}`).data.publicUrl;
+        setBgFile(null);
       }
 
       const payload = {
@@ -114,13 +117,15 @@ export default function BusinessPage() {
 
       if (settings?.id) {
         await supabase.from('business_settings').update(payload).eq('id', settings.id);
+        setSettings((prev) => prev ? { ...prev, ...payload } : prev);
       } else {
         const { data } = await supabase.from('business_settings').insert(payload).select().single();
         if (data) setSettings(data);
       }
 
-      setLogoFile(null);
-      setBgFile(null);
+      // Invalidate cache agar sidebar langsung pakai data terbaru
+      invalidateBusinessSettingsCache();
+
       toast({ title: 'Pengaturan bisnis berhasil disimpan' });
     } catch (err) {
       toast({
@@ -151,6 +156,7 @@ export default function BusinessPage() {
 
       <div className="max-w-2xl space-y-6">
 
+        {/* Nama Bisnis */}
         <div className="rounded-xl border border-line bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center gap-2">
             <Building2 className="h-4 w-4 text-ink-muted" />
@@ -163,11 +169,12 @@ export default function BusinessPage() {
               id="business-name"
               value={businessName}
               onChange={(e) => setBusinessName(e.target.value)}
-              placeholder="Contoh: Nestation Coffee"
+              placeholder={settings?.business_name || 'Contoh: Nestation Coffee'}
             />
           </div>
         </div>
 
+        {/* Logo */}
         <div className="rounded-xl border border-line bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center gap-2">
             <ImageIcon className="h-4 w-4 text-ink-muted" />
@@ -175,31 +182,47 @@ export default function BusinessPage() {
           </div>
           <Separator className="mb-5" />
           <div className="flex items-start gap-4">
-            <div className="flex h-24 w-24 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-line bg-surface">
-              {logoPreview ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={logoPreview} alt="Logo" className="h-full w-full object-contain p-1" />
-              ) : (
-                <ImageIcon className="h-8 w-8 text-ink-muted/40" />
-              )}
-            </div>
+            {/* Preview logo */}
+            <button
+              type="button"
+              onClick={() => logoInputRef.current?.click()}
+              className="group relative flex h-24 w-24 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-line bg-surface transition-colors hover:border-[#e00000]/50"
+              aria-label="Pilih logo"
+            >
+              {logoPreview
+                ? <img src={logoPreview} alt="Logo" className="h-full w-full object-contain p-1" /> // eslint-disable-line @next/next/no-img-element
+                : <ImageIcon className="h-8 w-8 text-ink-muted/40" />
+              }
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 rounded-xl">
+                <Camera className="h-6 w-6 text-white" />
+              </div>
+            </button>
+
             <div className="space-y-2">
               <p className="text-sm text-ink-muted">PNG atau JPG, maks 5MB. Disarankan rasio 1:1.</p>
+              {/* accept="image/*" tanpa capture agar bisa pilih galeri atau ambil foto */}
               <input
                 ref={logoInputRef}
                 type="file"
-                accept="image/png,image/jpeg,image/webp"
+                accept="image/*"
                 className="hidden"
                 onChange={handleImageChange('logo')}
               />
-              <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => logoInputRef.current?.click()}>
-                <Upload className="h-3.5 w-3.5" />
-                Pilih Logo
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => logoInputRef.current?.click()}
+              >
+                <Camera className="h-3.5 w-3.5" />
+                Pilih / Foto Logo
               </Button>
             </div>
           </div>
         </div>
 
+        {/* Background */}
         <div className="rounded-xl border border-line bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center gap-2">
             <ImageIcon className="h-4 w-4 text-ink-muted" />
@@ -207,27 +230,43 @@ export default function BusinessPage() {
           </div>
           <Separator className="mb-5" />
           <div className="space-y-3">
-            <div className="h-36 w-full overflow-hidden rounded-xl border-2 border-dashed border-line bg-surface">
-              {bgPreview ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={bgPreview} alt="Background" className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full items-center justify-center">
-                  <ImageIcon className="h-10 w-10 text-ink-muted/40" />
-                </div>
-              )}
-            </div>
+            {/* Preview background */}
+            <button
+              type="button"
+              onClick={() => bgInputRef.current?.click()}
+              className="group relative h-36 w-full overflow-hidden rounded-xl border-2 border-dashed border-line bg-surface transition-colors hover:border-[#e00000]/50"
+              aria-label="Pilih background"
+            >
+              {bgPreview
+                ? <img src={bgPreview} alt="Background" className="h-full w-full object-cover" /> // eslint-disable-line @next/next/no-img-element
+                : (
+                  <div className="flex h-full items-center justify-center">
+                    <ImageIcon className="h-10 w-10 text-ink-muted/40" />
+                  </div>
+                )
+              }
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                <Camera className="h-8 w-8 text-white" />
+              </div>
+            </button>
+
             <p className="text-sm text-ink-muted">Tampil di halaman sign-in. PNG/JPG, maks 5MB, disarankan 16:9.</p>
             <input
               ref={bgInputRef}
               type="file"
-              accept="image/png,image/jpeg,image/webp"
+              accept="image/*"
               className="hidden"
               onChange={handleImageChange('bg')}
             />
-            <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => bgInputRef.current?.click()}>
-              <Upload className="h-3.5 w-3.5" />
-              Pilih Foto Background
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => bgInputRef.current?.click()}
+            >
+              <Camera className="h-3.5 w-3.5" />
+              Pilih / Foto Background
             </Button>
           </div>
         </div>

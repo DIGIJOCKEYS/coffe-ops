@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { canAccess, NAV_GROUPS, type NavItem } from '@/lib/nav-config';
 import { cn } from '@/lib/utils';
 import { useRole } from '@/components/layout/role-context';
+import { useBusinessSettings } from '@/hooks/use-business-settings';
 
 type SidebarNavProps = {
   collapsed: boolean;
@@ -14,9 +15,36 @@ type SidebarNavProps = {
   onNavigate?: () => void;
 };
 
+function BrandLogo({ url, name, size }: { url: string | null; name: string; size: 'sm' | 'lg' }) {
+  const dim = size === 'lg' ? 'h-9 w-9 rounded-xl' : 'h-7 w-7 rounded-lg';
+  if (url) {
+    return (
+      <span className={cn('flex shrink-0 items-center justify-center overflow-hidden bg-[#e00000] shadow-sm', dim)}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={url} alt={name} className="h-full w-full object-contain p-0.5" />
+      </span>
+    );
+  }
+  return (
+    <span className={cn('flex shrink-0 items-center justify-center bg-[#e00000] shadow-sm', dim)}>
+      {size === 'lg' ? (
+        <span className="text-base font-black text-white leading-none">{name.charAt(0).toUpperCase()}</span>
+      ) : (
+        <svg width="18" height="18" viewBox="0 0 36 36" fill="none">
+          <circle cx="18" cy="18" r="18" fill="#e00000" />
+          <ellipse cx="18" cy="18" rx="10" ry="7" fill="#ff6b00" transform="rotate(-30 18 18)" />
+          <ellipse cx="18" cy="18" rx="6" ry="3.5" fill="#e00000" transform="rotate(-30 18 18)" />
+          <ellipse cx="14" cy="14" rx="4" ry="2.5" fill="#ffa500" opacity="0.7" transform="rotate(-30 14 14)" />
+        </svg>
+      )}
+    </span>
+  );
+}
+
 export function SidebarNav({ collapsed, onToggleCollapsed, onNavigate }: SidebarNavProps) {
   const pathname = usePathname();
   const { role } = useRole();
+  const { businessName, logoUrl } = useBusinessSettings();
 
   return (
     <TooltipProvider delayDuration={150}>
@@ -27,25 +55,19 @@ export function SidebarNav({ collapsed, onToggleCollapsed, onNavigate }: Sidebar
             collapsed ? 'justify-center px-2' : 'justify-between px-5',
           )}
         >
-          <Link href="/dashboard" onClick={onNavigate} className="flex items-center gap-2 min-w-0">
+          <Link href="/dashboard" onClick={onNavigate} className="flex items-center gap-2.5 min-w-0">
             {collapsed ? (
-              /* Collapsed: kotak merah + huruf N */
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#e00000] shadow-sm">
-                <span className="text-base font-black text-white leading-none">N</span>
-              </span>
+              <BrandLogo url={logoUrl} name={businessName} size="lg" />
             ) : (
-              /* Expanded: ikon SVG + teks — bekerja di light & dark */
-              <div className="flex items-center gap-2">
-                <svg width="28" height="28" viewBox="0 0 36 36" fill="none" className="shrink-0">
-                  <circle cx="18" cy="18" r="18" fill="#e00000" />
-                  <ellipse cx="18" cy="18" rx="10" ry="7" fill="#ff6b00" transform="rotate(-30 18 18)" />
-                  <ellipse cx="18" cy="18" rx="6" ry="3.5" fill="#e00000" transform="rotate(-30 18 18)" />
-                  <ellipse cx="14" cy="14" rx="4" ry="2.5" fill="#ffa500" opacity="0.7" transform="rotate(-30 14 14)" />
-                </svg>
-                <span className="text-sm font-black tracking-wider text-foreground uppercase">Nestation</span>
-              </div>
+              <>
+                <BrandLogo url={logoUrl} name={businessName} size="sm" />
+                <span className="text-sm font-black tracking-wider text-foreground uppercase truncate">
+                  {businessName}
+                </span>
+              </>
             )}
           </Link>
+
           {onToggleCollapsed && !collapsed && (
             <button
               type="button"

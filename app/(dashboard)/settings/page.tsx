@@ -27,7 +27,18 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!isLoaded || !user || initialized) return;
     setName(user.fullName ?? user.firstName ?? '');
-    setPhone(user.primaryPhoneNumber?.phoneNumber ?? '');
+
+    // Phone disimpan di Supabase profiles, bukan di Clerk
+    const supabase = createClient();
+    supabase
+      .from('profiles')
+      .select('phone')
+      .eq('id', user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.phone) setPhone(data.phone);
+      });
+
     setInitialized(true);
   }, [isLoaded, user, initialized]);
 
@@ -53,24 +64,18 @@ export default function SettingsPage() {
     setSavingProfile(true);
     try {
       const nameParts = name.trim().split(/\s+/);
-
-      // Hanya update nama — username dikelola terpisah oleh Clerk dashboard
       await user.update({
         firstName: nameParts[0],
         lastName: nameParts.slice(1).join(' ') || undefined,
       });
 
-      // Simpan nama & phone ke Supabase profiles
       const supabase = createClient();
       await supabase
         .from('profiles')
-        .update({
-          name: name.trim(),
-          phone: phone.trim() || null,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ name: name.trim(), phone: phone.trim() || null, updated_at: new Date().toISOString() })
         .eq('id', user.id);
 
+      setInitialized(false);
       toast({ title: 'Profil berhasil disimpan' });
     } catch (err) {
       toast({
@@ -128,7 +133,6 @@ export default function SettingsPage() {
       });
     } finally {
       setSavingProfile(false);
-      // Reset input agar file yang sama bisa dipilih ulang
       if (avatarInputRef.current) avatarInputRef.current.value = '';
     }
   };
@@ -145,12 +149,11 @@ export default function SettingsPage() {
 
         {/* Avatar */}
         <div className="flex items-center gap-5 rounded-xl border border-line bg-white p-6 shadow-sm">
-          {/* Input file hidden — accept="image/*" + capture memungkinkan kamera di HP */}
+          {/* accept="image/*" tanpa capture agar user bisa pilih dari galeri ATAU kamera */}
           <input
             ref={avatarInputRef}
             type="file"
             accept="image/*"
-            capture="environment"
             className="hidden"
             onChange={handleAvatarChange}
           />
@@ -161,12 +164,10 @@ export default function SettingsPage() {
             className="group relative flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#e00000] text-white ring-4 ring-[#e00000]/10 transition-opacity hover:opacity-90 disabled:opacity-60"
             aria-label="Ganti foto profil"
           >
-            {avatar ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={avatar} alt={name} className="h-full w-full object-cover" />
-            ) : (
-              <span className="text-2xl font-bold">{initials}</span>
-            )}
+            {avatar
+              ? <img src={avatar} alt={name} className="h-full w-full object-cover" /> // eslint-disable-line @next/next/no-img-element
+              : <span className="text-2xl font-bold">{initials}</span>
+            }
             <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
               <Camera className="h-6 w-6 text-white" />
             </div>
@@ -185,7 +186,7 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Informasi Profil */}
+        {/* Informasi Profil — tanpa username (Clerk tidak mengizinkan update via API) */}
         <div className="rounded-xl border border-line bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center gap-2">
             <User className="h-4 w-4 text-ink-muted" />
@@ -202,11 +203,13 @@ export default function SettingsPage() {
                 placeholder="Masukkan nama lengkap"
               />
             </div>
+
             <div className="space-y-1.5">
               <Label htmlFor="email">Email</Label>
               <Input id="email" value={email} disabled className="cursor-not-allowed opacity-60" />
               <p className="text-xs text-ink-muted">Email tidak dapat diubah dari sini.</p>
             </div>
+
             <div className="space-y-1.5">
               <Label htmlFor="phone" className="flex items-center gap-1.5">
                 <Phone className="h-3.5 w-3.5" />
@@ -216,11 +219,12 @@ export default function SettingsPage() {
                 id="phone"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="+62812xxxxxxxx"
+                placeholder={phone || '+62812xxxxxxxx'}
                 type="tel"
               />
               <p className="text-xs text-ink-muted">Nomor HP disimpan di profil Nestation.</p>
             </div>
+
             <div className="flex justify-end">
               <Button onClick={handleSaveProfile} disabled={savingProfile} className="gap-2">
                 {savingProfile ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
