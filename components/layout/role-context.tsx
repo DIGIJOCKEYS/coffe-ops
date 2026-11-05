@@ -1,9 +1,8 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { useUser, useClerk, useSession } from '@clerk/nextjs';
+import { useUser, useClerk } from '@clerk/nextjs';
 import { createClient } from '@/lib/supabase/client';
-import { setClerkSession } from '@/lib/operations-data';
 import { useSupabaseRealtime } from '@/hooks/use-supabase-realtime';
 import type { Role } from '@/lib/nav-config';
 
@@ -27,14 +26,7 @@ function isRole(value: unknown): value is Role {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
-  const { session } = useSession();
   const userId = user?.id;
-
-  // Register Clerk session ke operations-data agar semua Supabase calls
-  // otomatis menyertakan Clerk session token untuk RLS
-  useEffect(() => {
-    setClerkSession(session);
-  }, [session]);
   const fullName = user?.fullName;
   const firstName = user?.firstName;
   const emailAddress = user?.primaryEmailAddress?.emailAddress;
@@ -64,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const email = emailAddress || '';
 
       try {
-        const supabase = createClient(session);
+        const supabase = createClient();
         const { data, error } = await supabase
           .from('profiles')
           .select('id, name, role, is_active')

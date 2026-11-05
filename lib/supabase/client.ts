@@ -1,32 +1,12 @@
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
-import type { SessionResource } from '@clerk/types';
 
 /**
- * Buat Supabase client untuk Client Components dengan Clerk auth.
- *
- * Sesuai dokumentasi Clerk + Supabase integration (April 2025):
- * - Clerk harus didaftarkan sebagai Third-Party Auth Provider di Supabase Dashboard
- * - Session token dari Clerk otomatis dikirim ke Supabase untuk RLS
- *
- * @param session - Clerk session dari useSession() hook
+ * Buat Supabase client untuk Client Components.
+ * Menggunakan anon key — akses dikontrol oleh RLS policy permissive.
+ * Clerk session token tidak dikirim karena Supabase Third-Party Auth
+ * belum bisa dikonfigurasi (domain proxy /__clerk ditolak Supabase).
  */
-export function createClient(session?: SessionResource | null) {
-  return createSupabaseClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      async accessToken() {
-        return session?.getToken() ?? null;
-      },
-    },
-  );
-}
-
-/**
- * Buat Supabase client tanpa auth (untuk operasi public/anon).
- * Hanya untuk data yang memang boleh dibaca semua orang.
- */
-export function createAnonClient() {
+export function createClient() {
   return createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,

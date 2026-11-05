@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/client';
-import type { SessionResource } from '@clerk/types';
 import type {
   AuditEntry,
   DailySales,
@@ -17,20 +16,9 @@ import type {
   UserProfile,
 } from '@/types/operations';
 
-// Singleton: simpan Clerk session dari AuthProvider
-let _session: SessionResource | null | undefined;
-
-/**
- * Daftarkan Clerk session dari AuthProvider.
- * Panggil ini dari useEffect di AuthProvider ketika session berubah.
- */
-export function setClerkSession(session: SessionResource | null | undefined) {
-  _session = session;
-}
-
-/** Buat Supabase client dengan Clerk token jika tersedia */
+/** Buat Supabase client */
 function getSupabaseClient() {
-  return createClient(_session);
+  return createClient();
 }
 
 const DATE_FORMAT = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' });
