@@ -8,6 +8,16 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', 'date-fns'],
   },
+  async rewrites() {
+    return [
+      {
+        source: '/__clerk/:path*',
+        destination: '/api/clerk-proxy/:path*',
+      },
+    ];
+  },
 };
+
+module.exports = nextConfig;
 
 module.exports = nextConfig;

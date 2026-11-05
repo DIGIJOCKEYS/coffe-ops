@@ -6,6 +6,7 @@ const isPublicRoute = createRouteMatcher([
   '/login(.*)',
   '/sso-callback(.*)',
   '/api/clerk-check',
+  '/api/clerk-proxy(.*)',
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
@@ -16,7 +17,7 @@ export default clerkMiddleware(async (auth, request) => {
 
 export const config = {
   matcher: [
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    '/((?!_next|__clerk|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
     '/(api|trpc)(.*)',
   ],
 };
