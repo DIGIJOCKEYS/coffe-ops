@@ -38,12 +38,13 @@ export default function BusinessPage() {
     let active = true;
     const supabase = createClient();
 
-    supabase
-      .from('business_settings')
-      .select('*')
-      .limit(1)
-      .maybeSingle()
-      .then(({ data }) => {
+    const load = async () => {
+      try {
+        const { data } = await supabase
+          .from('business_settings')
+          .select('*')
+          .limit(1)
+          .maybeSingle();
         if (!active) return;
         if (data) {
           setSettings(data);
@@ -51,12 +52,14 @@ export default function BusinessPage() {
           setLogoPreview(data.logo_url);
           setBgPreview(data.background_url);
         }
-        setLoading(false);
-      })
-      .catch(() => {
+      } catch {
+        // belum ada data
+      } finally {
         if (active) setLoading(false);
-      });
+      }
+    };
 
+    load();
     return () => { active = false; };
   }, []);
 
