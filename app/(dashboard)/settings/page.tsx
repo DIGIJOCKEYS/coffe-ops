@@ -117,8 +117,8 @@ export default function SettingsPage() {
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      toast({ title: 'Ukuran foto maksimal 5MB', variant: 'destructive' });
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: 'Ukuran foto maksimal 10MB', variant: 'destructive' });
       return;
     }
     setSavingProfile(true);

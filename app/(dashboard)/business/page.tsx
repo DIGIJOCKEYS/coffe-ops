@@ -65,8 +65,8 @@ export default function BusinessPage() {
   const handleImageChange = (type: 'logo' | 'bg') => (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      toast({ title: 'Ukuran file maksimal 5MB', variant: 'destructive' });
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: 'Ukuran file maksimal 10MB', variant: 'destructive' });
       return;
     }
     const url = URL.createObjectURL(file);
@@ -199,7 +199,7 @@ export default function BusinessPage() {
             </button>
 
             <div className="space-y-2">
-              <p className="text-sm text-ink-muted">PNG atau JPG, maks 5MB. Disarankan rasio 1:1.</p>
+              <p className="text-sm text-ink-muted">PNG atau JPG, maks 10MB. Disarankan rasio 1:1.</p>
               {/* accept="image/*" tanpa capture agar bisa pilih galeri atau ambil foto */}
               <input
                 ref={logoInputRef}
@@ -250,7 +250,7 @@ export default function BusinessPage() {
               </div>
             </button>
 
-            <p className="text-sm text-ink-muted">Tampil di halaman sign-in. PNG/JPG, maks 5MB, disarankan 16:9.</p>
+            <p className="text-sm text-ink-muted">Tampil di halaman sign-in. PNG/JPG, maks 10MB, disarankan 16:9.</p>
             <input
               ref={bgInputRef}
               type="file"
