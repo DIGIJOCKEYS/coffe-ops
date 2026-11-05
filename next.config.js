@@ -8,35 +8,21 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', 'date-fns'],
   },
-  // Proxy Clerk Frontend API requests through /__clerk.
+  // Clerk Frontend API Proxy
   //
-  // Per official Clerk docs (clerk.com/docs/advanced-usage/using-proxies):
-  //   - Requests to /__clerk/* must forward to https://frontend-api.clerk.dev/*
-  //   - Three required headers must be added:
-  //       Clerk-Proxy-Url  — the full proxy URL
-  //       Clerk-Secret-Key — your Clerk secret key
-  //       X-Forwarded-For  — original client IP
+  // /__clerk/* is rewritten to the internal Route Handler at /api/clerk-proxy/*
+  // The Route Handler adds the required Clerk headers (including CLERK_SECRET_KEY)
+  // before forwarding to https://frontend-api.clerk.dev.
   //
-  // Next.js rewrites run BEFORE middleware, so this executes before any
-  // Clerk auth check — breaking the circular dependency.
+  // This is necessary because:
+  //  1. *.vercel.app does not support arbitrary subdomains (clerk.<domain>)
+  //  2. Next.js rewrites() cannot add secret headers to upstream requests
+  //  3. createFrontendApiProxyHandlers is not available in @clerk/nextjs@6.x
   async rewrites() {
     return [
       {
         source: '/__clerk/:path*',
-        destination: 'https://frontend-api.clerk.dev/:path*',
-      },
-    ];
-  },
-  async headers() {
-    return [
-      {
-        source: '/__clerk/:path*',
-        headers: [
-          {
-            key: 'Clerk-Proxy-Url',
-            value: 'https://nestation-ops.vercel.app/__clerk',
-          },
-        ],
+        destination: '/api/clerk-proxy/:path*',
       },
     ];
   },

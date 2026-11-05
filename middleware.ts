@@ -6,24 +6,20 @@ const isPublicRoute = createRouteMatcher([
   '/login(.*)',
   '/sso-callback(.*)',
   '/api/clerk-check',
+  // Clerk proxy route handler — must be public so Clerk JS can load
+  // before authentication is available. No user data is exposed here.
+  '/api/clerk-proxy(.*)',
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
-  // /__clerk is handled entirely by Next.js rewrites (next.config.js).
-  // Clerk middleware must NOT intercept it — doing so causes a circular
-  // dependency where Clerk tries to verify auth before it has loaded.
-  if (request.nextUrl.pathname.startsWith('/__clerk')) {
-    return;
-  }
-
   if (!isPublicRoute(request)) {
     await auth.protect();
   }
 });
 
 export const config = {
-  // /__clerk is intentionally excluded from the matcher so the middleware
-  // never runs for proxy requests. Next.js rewrites handle them directly.
+  // __clerk is excluded from the matcher — rewrites handle it before middleware.
+  // All other routes (including /api/*) go through auth check.
   matcher: [
     '/((?!_next|__clerk|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
     '/(api|trpc)(.*)',
