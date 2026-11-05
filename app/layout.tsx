@@ -18,8 +18,10 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // Use proxy URL for *.vercel.app domains (no custom subdomain available)
+  const proxyUrl = process.env.NEXT_PUBLIC_CLERK_PROXY_URL || undefined;
   return (
-    <ClerkProvider proxyUrl={`${process.env.NEXT_PUBLIC_CLERK_PROXY_URL}`}>
+    <ClerkProvider {...(proxyUrl ? { proxyUrl } : {})}>
       <html lang="id" suppressHydrationWarning>
         <body className="antialiased" suppressHydrationWarning>
           <ThemeProvider>
