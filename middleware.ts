@@ -6,9 +6,6 @@ const isPublicRoute = createRouteMatcher([
   '/login(.*)',
   '/sso-callback(.*)',
   '/api/clerk-check',
-  // Clerk proxy route handler — must be public so Clerk JS can load
-  // before authentication is available. No user data is exposed here.
-  '/api/clerk-proxy(.*)',
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
@@ -18,10 +15,8 @@ export default clerkMiddleware(async (auth, request) => {
 });
 
 export const config = {
-  // __clerk is excluded from the matcher — rewrites handle it before middleware.
-  // All other routes (including /api/*) go through auth check.
   matcher: [
-    '/((?!_next|__clerk|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
     '/(api|trpc)(.*)',
   ],
 };
