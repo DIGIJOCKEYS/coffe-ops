@@ -53,8 +53,14 @@ export default function SignInPage() {
       if (result.status === 'complete') {
         await setActive({ session: result.createdSessionId });
         router.push('/dashboard');
+      } else if (result.status === 'needs_second_factor') {
+        setError('Akun ini memerlukan verifikasi dua langkah. Nonaktifkan 2FA di Clerk Dashboard dulu.');
+      } else if (result.status === 'needs_new_password') {
+        setError('Password perlu diperbarui. Silakan reset password melalui Clerk Dashboard.');
+      } else if (result.status === 'needs_first_factor') {
+        setError('Verifikasi email diperlukan. Cek inbox email Anda.');
       } else {
-        setError('Login belum selesai. Silakan coba lagi.');
+        setError(`Login belum selesai (status: ${result.status}). Silakan coba lagi.`);
       }
     } catch (cause) {
       setError(isClerkAPIResponseError(cause)
