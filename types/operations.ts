@@ -87,9 +87,18 @@ export type UserProfile = {
   id: string;
   name: string;
   email: string;
+  username?: string;
+  phone?: string;
   role: 'admin' | 'staff';
   isActive: boolean;
   createdAt: string;
+};
+
+export type BusinessSettings = {
+  id: string;
+  businessName: string;
+  logoUrl: string | null;
+  backgroundUrl: string | null;
 };
 
 export type DailySales = { date: string; omzet: number };

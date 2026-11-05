@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { LogOut, Settings, User } from 'lucide-react';
+import { BuildingIcon, LogOut, Settings } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -81,11 +81,15 @@ export function UserMenu() {
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           {role === 'admin' && (
-            <DropdownMenuItem onClick={() => router.push('/users')} className="cursor-pointer gap-2">
-              <User className="h-4 w-4" />
-              Kelola Pengguna
+            <DropdownMenuItem onClick={() => router.push('/business')} className="cursor-pointer gap-2">
+              <BuildingIcon className="h-4 w-4" />
+              Pengaturan Bisnis
             </DropdownMenuItem>
           )}
+          <DropdownMenuItem onClick={() => router.push('/settings')} className="cursor-pointer gap-2">
+            <Settings className="h-4 w-4" />
+            Pengaturan Akun
+          </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer gap-2 text-red-600 focus:bg-red-50 focus:text-red-700"
             disabled={signingOut}

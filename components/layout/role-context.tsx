@@ -31,6 +31,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const firstName = user?.firstName;
   const emailAddress = user?.primaryEmailAddress?.emailAddress;
   const avatarUrl = user?.imageUrl || null;
+  const username = user?.username || null;
+  const phone = user?.primaryPhoneNumber?.phoneNumber || null;
   const metadataRole = user?.publicMetadata?.role;
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -63,9 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .eq('id', userId)
           .maybeSingle();
 
-        if (error) {
-          throw error;
-        }
+        if (error) throw error;
 
         if (data) {
           if (isMounted) {
@@ -75,6 +75,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               isActive: data.is_active !== false,
             });
           }
+          // Sync avatar, username, phone jika berubah di Clerk
+          await supabase
+            .from('profiles')
+            .update({ avatar_url: avatarUrl, username, phone, updated_at: new Date().toISOString() })
+            .eq('id', userId);
         } else {
           const { count, error: countError } = await supabase
             .from('profiles')
@@ -82,14 +87,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (countError) throw countError;
 
           const defaultRole: Role = isRole(metadataRole) ? metadataRole : count === 0 ? 'admin' : 'staff';
-          // Akun baru (selain admin pertama) dibuat non-aktif dulu.
-          // Admin harus mengaktifkan manual di halaman Pengguna.
           const defaultActive = count === 0;
 
           const { error: insertError } = await supabase.from('profiles').insert({
             id: userId,
             name: displayName,
             email,
+            username,
+            phone,
             avatar_url: avatarUrl,
             role: defaultRole,
             is_active: defaultActive,
@@ -104,23 +109,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             });
           }
         }
-      } catch (error) {
+      } catch (err) {
         if (isMounted) {
-          setError(error instanceof Error ? error.message : 'Gagal memuat profil pengguna dari Supabase.');
+          setError(err instanceof Error ? err.message : 'Gagal memuat profil pengguna dari Supabase.');
         }
       } finally {
-        if (isMounted) {
-          setProfileLoading(false);
-        }
+        if (isMounted) setProfileLoading(false);
       }
     };
 
     syncProfileWithSupabase();
 
-    return () => {
-      isMounted = false;
-    };
-  }, [isLoaded, userId, fullName, firstName, emailAddress, avatarUrl, metadataRole, profileRevision]);
+    return () => { isMounted = false; };
+  }, [isLoaded, userId, fullName, firstName, emailAddress, avatarUrl, username, phone, metadataRole, profileRevision]);
 
   useSupabaseRealtime(['profiles'], refreshProfile, Boolean(userId));
 
@@ -132,9 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading: !isLoaded || (!!user && profileLoading),
     error,
     role: activeRole,
-    signOut: async () => {
-      await signOut();
-    },
+    signOut: async () => { await signOut(); },
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

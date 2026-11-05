@@ -1,5 +1,6 @@
 import {
   ArrowUpFromLine,
+  Building2,
   ClipboardCheck,
   FileBarChart,
   LayoutDashboard,
@@ -55,7 +56,8 @@ export const NAV_GROUPS: NavGroup[] = [
     title: 'Pengaturan',
     items: [
       { href: '/users', label: 'Pengguna', icon: Users, roles: ADMIN_ONLY },
-      { href: '/settings', label: 'Pengaturan Bisnis', icon: Settings, roles: ADMIN_ONLY },
+      { href: '/business', label: 'Pengaturan Bisnis', icon: Building2, roles: ADMIN_ONLY },
+      { href: '/settings', label: 'Pengaturan Akun', icon: Settings, roles: ALL_ROLES },
     ],
   },
 ];

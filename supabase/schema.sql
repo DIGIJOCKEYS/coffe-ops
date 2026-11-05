@@ -47,6 +47,8 @@ create table public.profiles (
   id text primary key,
   name text not null default '',
   email text not null default '',
+  username text unique,
+  phone text,
   role text not null default 'staff' check (role in ('admin', 'staff')),
   is_active boolean not null default true,
   avatar_url text,
@@ -861,4 +863,44 @@ begin
 end;
 $$;
 
+-- ============================================================
+-- BUSINESS SETTINGS
+-- ============================================================
+
+create table public.business_settings (
+  id uuid primary key default gen_random_uuid(),
+  business_name text not null default 'Nestation',
+  logo_url text,
+  background_url text,
+  updated_by text references public.profiles (id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.business_settings enable row level security;
+create policy "business_settings_access" on public.business_settings
+  for all to anon, authenticated using (true) with check (true);
+
+insert into public.business_settings (business_name) values ('Nestation');
+
+-- ============================================================
+-- SUPABASE STORAGE - bucket untuk aset bisnis
+-- ============================================================
+
+insert into storage.buckets (id, name, public)
+values ('business', 'business', true)
+on conflict (id) do nothing;
+
+create policy "business_assets_read" on storage.objects
+  for select to anon, authenticated
+  using (bucket_id = 'business');
+
+create policy "business_assets_write" on storage.objects
+  for insert to anon, authenticated
+  with check (bucket_id = 'business');
+
+create policy "business_assets_update" on storage.objects
+  for update to anon, authenticated
+  using (bucket_id = 'business');
+
+commit;
 commit;
