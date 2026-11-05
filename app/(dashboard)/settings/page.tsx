@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { Camera, KeyRound, Loader2, Phone, Save, User } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
@@ -14,9 +14,9 @@ import { createClient } from '@/lib/supabase/client';
 export default function SettingsPage() {
   const { user, isLoaded } = useUser();
   const { toast } = useToast();
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState('');
-  const [username, setUsername] = useState('');
   const [phone, setPhone] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -27,7 +27,6 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!isLoaded || !user || initialized) return;
     setName(user.fullName ?? user.firstName ?? '');
-    setUsername(user.username ?? '');
     setPhone(user.primaryPhoneNumber?.phoneNumber ?? '');
     setInitialized(true);
   }, [isLoaded, user, initialized]);
@@ -54,16 +53,22 @@ export default function SettingsPage() {
     setSavingProfile(true);
     try {
       const nameParts = name.trim().split(/\s+/);
+
+      // Hanya update nama — username dikelola terpisah oleh Clerk dashboard
       await user.update({
         firstName: nameParts[0],
         lastName: nameParts.slice(1).join(' ') || undefined,
-        username: username.trim() || undefined,
       });
 
+      // Simpan nama & phone ke Supabase profiles
       const supabase = createClient();
       await supabase
         .from('profiles')
-        .update({ name: name.trim(), updated_at: new Date().toISOString() })
+        .update({
+          name: name.trim(),
+          phone: phone.trim() || null,
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', user.id);
 
       toast({ title: 'Profil berhasil disimpan' });
@@ -79,8 +84,8 @@ export default function SettingsPage() {
   };
 
   const handleSavePassword = async () => {
-    if (newPassword.length < 8) {
-      toast({ title: 'Password minimal 8 karakter', variant: 'destructive' });
+    if (newPassword.length < 15) {
+      toast({ title: 'Password minimal 15 karakter', variant: 'destructive' });
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -104,32 +109,28 @@ export default function SettingsPage() {
     }
   };
 
-  const handleAvatarClick = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      if (file.size > 5 * 1024 * 1024) {
-        toast({ title: 'Ukuran foto maksimal 5MB', variant: 'destructive' });
-        return;
-      }
-      setSavingProfile(true);
-      try {
-        await user.setProfileImage({ file });
-        toast({ title: 'Foto profil berhasil diperbarui' });
-      } catch (err) {
-        toast({
-          title: 'Gagal mengunggah foto',
-          description: err instanceof Error ? err.message : 'Coba lagi.',
-          variant: 'destructive',
-        });
-      } finally {
-        setSavingProfile(false);
-      }
-    };
-    input.click();
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: 'Ukuran foto maksimal 5MB', variant: 'destructive' });
+      return;
+    }
+    setSavingProfile(true);
+    try {
+      await user.setProfileImage({ file });
+      toast({ title: 'Foto profil berhasil diperbarui' });
+    } catch (err) {
+      toast({
+        title: 'Gagal mengunggah foto',
+        description: err instanceof Error ? err.message : 'Coba lagi.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingProfile(false);
+      // Reset input agar file yang sama bisa dipilih ulang
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+    }
   };
 
   const email = user.primaryEmailAddress?.emailAddress ?? '';
@@ -142,12 +143,22 @@ export default function SettingsPage() {
 
       <div className="max-w-2xl space-y-6">
 
+        {/* Avatar */}
         <div className="flex items-center gap-5 rounded-xl border border-line bg-white p-6 shadow-sm">
+          {/* Input file hidden — accept="image/*" + capture memungkinkan kamera di HP */}
+          <input
+            ref={avatarInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handleAvatarChange}
+          />
           <button
             type="button"
-            onClick={handleAvatarClick}
+            onClick={() => avatarInputRef.current?.click()}
             disabled={savingProfile}
-            className="group relative flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#e00000] text-white ring-4 ring-[#e00000]/10 transition-opacity hover:opacity-90"
+            className="group relative flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#e00000] text-white ring-4 ring-[#e00000]/10 transition-opacity hover:opacity-90 disabled:opacity-60"
             aria-label="Ganti foto profil"
           >
             {avatar ? (
@@ -165,7 +176,7 @@ export default function SettingsPage() {
             <p className="text-sm text-ink-muted">{email}</p>
             <button
               type="button"
-              onClick={handleAvatarClick}
+              onClick={() => avatarInputRef.current?.click()}
               disabled={savingProfile}
               className="mt-1.5 text-xs text-[#e00000] hover:underline disabled:opacity-50"
             >
@@ -174,6 +185,7 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Informasi Profil */}
         <div className="rounded-xl border border-line bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center gap-2">
             <User className="h-4 w-4 text-ink-muted" />
@@ -181,25 +193,14 @@ export default function SettingsPage() {
           </div>
           <Separator className="mb-5" />
           <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="name">Nama Lengkap</Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Masukkan nama lengkap"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="username">Username</Label>
-                <Input
-                  id="username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="username (opsional)"
-                />
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="name">Nama Lengkap</Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Masukkan nama lengkap"
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="email">Email</Label>
@@ -218,6 +219,7 @@ export default function SettingsPage() {
                 placeholder="+62812xxxxxxxx"
                 type="tel"
               />
+              <p className="text-xs text-ink-muted">Nomor HP disimpan di profil Nestation.</p>
             </div>
             <div className="flex justify-end">
               <Button onClick={handleSaveProfile} disabled={savingProfile} className="gap-2">
@@ -228,6 +230,7 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Ubah Password */}
         <div className="rounded-xl border border-line bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center gap-2">
             <KeyRound className="h-4 w-4 text-ink-muted" />
@@ -242,7 +245,7 @@ export default function SettingsPage() {
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Minimal 8 karakter"
+                placeholder="Minimal 15 karakter"
                 autoComplete="new-password"
               />
             </div>
