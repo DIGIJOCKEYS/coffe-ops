@@ -1,14 +1,26 @@
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { createClient as createSupabaseClient, SupabaseClient } from '@supabase/supabase-js';
+
+let _instance: SupabaseClient | null = null;
 
 /**
- * Buat Supabase client untuk Client Components.
- * Menggunakan anon key — akses dikontrol oleh RLS policy permissive.
- * Clerk session token tidak dikirim karena Supabase Third-Party Auth
- * belum bisa dikonfigurasi (domain proxy /__clerk ditolak Supabase).
+ * Singleton Supabase client untuk Client Components.
+ * Hanya dibuat satu kali untuk menghindari "Multiple GoTrueClient instances" warning.
  */
-export function createClient() {
-  return createSupabaseClient(
+export function createClient(): SupabaseClient {
+  if (_instance) return _instance;
+
+  _instance = createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      auth: {
+        // Kita tidak pakai Supabase Auth (pakai Clerk), matikan auto-refresh
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    },
   );
+
+  return _instance;
 }
