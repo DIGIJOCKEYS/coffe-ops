@@ -84,6 +84,7 @@ export default function SignUpPage() {
     if (password.length < 15) { setError('Kata sandi minimal 15 karakter.'); return; }
     setLoading(true); setError(null);
     try {
+      // Note: Clerk automatically replaces incomplete signups on new signUp.create() calls
       await signUp.create({
         firstName: firstName.trim(), lastName: lastName.trim(),
         emailAddress: email.trim(), password,
