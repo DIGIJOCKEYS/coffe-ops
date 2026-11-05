@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { Camera, KeyRound, Loader2, Phone, Save, User } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
@@ -9,23 +9,42 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/components/layout/role-context';
 import { createClient } from '@/lib/supabase/client';
 
 export default function SettingsPage() {
   const { user, isLoaded } = useUser();
-  const { profile } = useAuth();
   const { toast } = useToast();
 
-  const [name, setName] = useState(profile?.name ?? user?.fullName ?? '');
-  const [username, setUsername] = useState(user?.username ?? '');
-  const [phone, setPhone] = useState(user?.primaryPhoneNumber?.phoneNumber ?? '');
+  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const [phone, setPhone] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
+  const [initialized, setInitialized] = useState(false);
 
-  if (!isLoaded || !user) return null;
+  useEffect(() => {
+    if (!isLoaded || !user || initialized) return;
+    setName(user.fullName ?? user.firstName ?? '');
+    setUsername(user.username ?? '');
+    setPhone(user.primaryPhoneNumber?.phoneNumber ?? '');
+    setInitialized(true);
+  }, [isLoaded, user, initialized]);
+
+  if (!isLoaded) {
+    return (
+      <>
+        <PageHeader title="Pengaturan Akun" description="Kelola informasi profil dan keamanan akun Anda." />
+        <div className="flex items-center gap-2 text-sm text-ink-muted">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Memuat…
+        </div>
+      </>
+    );
+  }
+
+  if (!user) return null;
 
   const handleSaveProfile = async () => {
     if (!name.trim()) {
@@ -34,9 +53,10 @@ export default function SettingsPage() {
     }
     setSavingProfile(true);
     try {
+      const nameParts = name.trim().split(/\s+/);
       await user.update({
-        firstName: name.trim().split(' ')[0],
-        lastName: name.trim().split(' ').slice(1).join(' ') || undefined,
+        firstName: nameParts[0],
+        lastName: nameParts.slice(1).join(' ') || undefined,
         username: username.trim() || undefined,
       });
 
@@ -114,7 +134,7 @@ export default function SettingsPage() {
 
   const email = user.primaryEmailAddress?.emailAddress ?? '';
   const avatar = user.imageUrl;
-  const initials = name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  const initials = name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
 
   return (
     <>
@@ -122,27 +142,24 @@ export default function SettingsPage() {
 
       <div className="max-w-2xl space-y-6">
 
-        {/* Avatar */}
         <div className="flex items-center gap-5 rounded-xl border border-line bg-white p-6 shadow-sm">
-          <div className="relative">
-            <button
-              type="button"
-              onClick={handleAvatarClick}
-              disabled={savingProfile}
-              className="group relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-[#e00000] text-white ring-4 ring-[#e00000]/10 transition-opacity hover:opacity-90"
-              aria-label="Ganti foto profil"
-            >
-              {avatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={avatar} alt={name} className="h-full w-full object-cover" />
-              ) : (
-                <span className="text-2xl font-bold">{initials}</span>
-              )}
-              <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                <Camera className="h-6 w-6 text-white" />
-              </div>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleAvatarClick}
+            disabled={savingProfile}
+            className="group relative flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#e00000] text-white ring-4 ring-[#e00000]/10 transition-opacity hover:opacity-90"
+            aria-label="Ganti foto profil"
+          >
+            {avatar ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={avatar} alt={name} className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-2xl font-bold">{initials}</span>
+            )}
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+              <Camera className="h-6 w-6 text-white" />
+            </div>
+          </button>
           <div>
             <p className="font-semibold text-ink">{name || 'Pengguna'}</p>
             <p className="text-sm text-ink-muted">{email}</p>
@@ -157,14 +174,12 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Informasi Profil */}
         <div className="rounded-xl border border-line bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center gap-2">
             <User className="h-4 w-4 text-ink-muted" />
             <h2 className="font-semibold text-ink">Informasi Profil</h2>
           </div>
           <Separator className="mb-5" />
-
           <div className="space-y-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
@@ -186,35 +201,24 @@ export default function SettingsPage() {
                 />
               </div>
             </div>
-
             <div className="space-y-1.5">
               <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                value={email}
-                disabled
-                className="cursor-not-allowed opacity-60"
-              />
-              <p className="text-xs text-ink-muted">Email tidak dapat diubah dari sini. Hubungi administrator.</p>
+              <Input id="email" value={email} disabled className="cursor-not-allowed opacity-60" />
+              <p className="text-xs text-ink-muted">Email tidak dapat diubah dari sini.</p>
             </div>
-
             <div className="space-y-1.5">
-              <Label htmlFor="phone">
-                <span className="flex items-center gap-1.5">
-                  <Phone className="h-3.5 w-3.5" />
-                  Nomor HP
-                </span>
+              <Label htmlFor="phone" className="flex items-center gap-1.5">
+                <Phone className="h-3.5 w-3.5" />
+                Nomor HP
               </Label>
               <Input
                 id="phone"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="+62..."
+                placeholder="+62812xxxxxxxx"
                 type="tel"
               />
-              <p className="text-xs text-ink-muted">Format: +62812xxxxxxxx</p>
             </div>
-
             <div className="flex justify-end">
               <Button onClick={handleSaveProfile} disabled={savingProfile} className="gap-2">
                 {savingProfile ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -224,14 +228,12 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Ubah Password */}
         <div className="rounded-xl border border-line bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center gap-2">
             <KeyRound className="h-4 w-4 text-ink-muted" />
             <h2 className="font-semibold text-ink">Ubah Password</h2>
           </div>
           <Separator className="mb-5" />
-
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="new-password">Password Baru</Label>

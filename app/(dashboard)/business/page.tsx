@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Building2, ImageIcon, Loader2, Save, Upload } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
@@ -18,22 +18,9 @@ type BusinessSettings = {
   background_url: string | null;
 };
 
-async function uploadFile(
-  supabase: ReturnType<typeof createClient>,
-  bucket: string,
-  path: string,
-  file: File,
-): Promise<string> {
-  const { error } = await supabase.storage.from(bucket).upload(path, file, { upsert: true });
-  if (error) throw new Error(error.message);
-  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-  return data.publicUrl;
-}
-
 export default function BusinessPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const supabase = createClient();
 
   const [settings, setSettings] = useState<BusinessSettings | null>(null);
   const [businessName, setBusinessName] = useState('');
@@ -47,24 +34,31 @@ export default function BusinessPage() {
   const logoInputRef = useRef<HTMLInputElement>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
 
-  const loadSettings = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data } = await supabase.from('business_settings').select('*').limit(1).single();
-      if (data) {
-        setSettings(data);
-        setBusinessName(data.business_name);
-        setLogoPreview(data.logo_url);
-        setBgPreview(data.background_url);
-      }
-    } catch {
-      // belum ada data — gunakan default
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  useEffect(() => {
+    let active = true;
+    const supabase = createClient();
 
-  useEffect(() => { loadSettings(); }, [loadSettings]);
+    supabase
+      .from('business_settings')
+      .select('*')
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!active) return;
+        if (data) {
+          setSettings(data);
+          setBusinessName(data.business_name);
+          setLogoPreview(data.logo_url);
+          setBgPreview(data.background_url);
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => { active = false; };
+  }, []);
 
   const handleImageChange = (type: 'logo' | 'bg') => (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -85,15 +79,26 @@ export default function BusinessPage() {
     }
     if (!user?.id) return;
     setSaving(true);
+
     try {
+      const supabase = createClient();
       let logoUrl = settings?.logo_url ?? null;
       let bgUrl = settings?.background_url ?? null;
 
       if (logoFile) {
-        logoUrl = await uploadFile(supabase, 'business', `logo-${user.id}`, logoFile);
+        const { error } = await supabase.storage
+          .from('business')
+          .upload(`logo-${user.id}`, logoFile, { upsert: true });
+        if (error) throw new Error(error.message);
+        logoUrl = supabase.storage.from('business').getPublicUrl(`logo-${user.id}`).data.publicUrl;
       }
+
       if (bgFile) {
-        bgUrl = await uploadFile(supabase, 'business', `background-${user.id}`, bgFile);
+        const { error } = await supabase.storage
+          .from('business')
+          .upload(`background-${user.id}`, bgFile, { upsert: true });
+        if (error) throw new Error(error.message);
+        bgUrl = supabase.storage.from('business').getPublicUrl(`background-${user.id}`).data.publicUrl;
       }
 
       const payload = {
@@ -107,12 +112,12 @@ export default function BusinessPage() {
       if (settings?.id) {
         await supabase.from('business_settings').update(payload).eq('id', settings.id);
       } else {
-        await supabase.from('business_settings').insert(payload);
+        const { data } = await supabase.from('business_settings').insert(payload).select().single();
+        if (data) setSettings(data);
       }
 
       setLogoFile(null);
       setBgFile(null);
-      await loadSettings();
       toast({ title: 'Pengaturan bisnis berhasil disimpan' });
     } catch (err) {
       toast({
@@ -143,27 +148,23 @@ export default function BusinessPage() {
 
       <div className="max-w-2xl space-y-6">
 
-        {/* Identitas Bisnis */}
         <div className="rounded-xl border border-line bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center gap-2">
             <Building2 className="h-4 w-4 text-ink-muted" />
             <h2 className="font-semibold text-ink">Identitas Bisnis</h2>
           </div>
           <Separator className="mb-5" />
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="business-name">Nama Bisnis</Label>
-              <Input
-                id="business-name"
-                value={businessName}
-                onChange={(e) => setBusinessName(e.target.value)}
-                placeholder="Contoh: Nestation Coffee"
-              />
-            </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="business-name">Nama Bisnis</Label>
+            <Input
+              id="business-name"
+              value={businessName}
+              onChange={(e) => setBusinessName(e.target.value)}
+              placeholder="Contoh: Nestation Coffee"
+            />
           </div>
         </div>
 
-        {/* Logo */}
         <div className="rounded-xl border border-line bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center gap-2">
             <ImageIcon className="h-4 w-4 text-ink-muted" />
@@ -171,7 +172,7 @@ export default function BusinessPage() {
           </div>
           <Separator className="mb-5" />
           <div className="flex items-start gap-4">
-            <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-line bg-surface">
+            <div className="flex h-24 w-24 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-line bg-surface">
               {logoPreview ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={logoPreview} alt="Logo" className="h-full w-full object-contain p-1" />
@@ -179,11 +180,8 @@ export default function BusinessPage() {
                 <ImageIcon className="h-8 w-8 text-ink-muted/40" />
               )}
             </div>
-            <div className="flex-1 space-y-2">
-              <p className="text-sm text-ink-muted">
-                Upload logo bisnis dalam format PNG atau JPG. Ukuran maksimal 5MB.
-                Disarankan rasio 1:1 (persegi).
-              </p>
+            <div className="space-y-2">
+              <p className="text-sm text-ink-muted">PNG atau JPG, maks 5MB. Disarankan rasio 1:1.</p>
               <input
                 ref={logoInputRef}
                 type="file"
@@ -191,13 +189,7 @@ export default function BusinessPage() {
                 className="hidden"
                 onChange={handleImageChange('logo')}
               />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                onClick={() => logoInputRef.current?.click()}
-              >
+              <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => logoInputRef.current?.click()}>
                 <Upload className="h-3.5 w-3.5" />
                 Pilih Logo
               </Button>
@@ -205,7 +197,6 @@ export default function BusinessPage() {
           </div>
         </div>
 
-        {/* Background */}
         <div className="rounded-xl border border-line bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center gap-2">
             <ImageIcon className="h-4 w-4 text-ink-muted" />
@@ -223,9 +214,7 @@ export default function BusinessPage() {
                 </div>
               )}
             </div>
-            <p className="text-sm text-ink-muted">
-              Foto ini tampil di halaman sign-in. Format PNG/JPG, maksimal 5MB, disarankan landscape (16:9).
-            </p>
+            <p className="text-sm text-ink-muted">Tampil di halaman sign-in. PNG/JPG, maks 5MB, disarankan 16:9.</p>
             <input
               ref={bgInputRef}
               type="file"
@@ -233,20 +222,13 @@ export default function BusinessPage() {
               className="hidden"
               onChange={handleImageChange('bg')}
             />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              onClick={() => bgInputRef.current?.click()}
-            >
+            <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => bgInputRef.current?.click()}>
               <Upload className="h-3.5 w-3.5" />
               Pilih Foto Background
             </Button>
           </div>
         </div>
 
-        {/* Save */}
         <div className="flex justify-end">
           <Button onClick={handleSave} disabled={saving} className="gap-2">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
