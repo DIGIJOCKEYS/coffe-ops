@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Eye, Image as ImageIcon, Pencil, Plus, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { DataState } from '@/components/shared/data-state';
+import { PhotoInput } from '@/components/shared/photo-input';
 import { DateRangeFilter, type DateRange } from '@/components/shared/date-range-filter';
 import { useAuth, useRole } from '@/components/layout/role-context';
 import { Badge } from '@/components/ui/badge';
@@ -156,9 +157,7 @@ export default function ExpensesPage() {
     setAmount(''); setPhoto(null); setPhotoThumbnail(null); setError(null);
   };
 
-  const handlePhotoChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) { setPhoto(null); setPhotoThumbnail(null); return; }
+  const handlePhotoChange = (file: File) => {
     const reader = new FileReader();
     reader.onload = () => setPhoto(typeof reader.result === 'string' ? reader.result : null);
     reader.onerror = () => setError('Foto gagal dibaca.');
@@ -497,7 +496,12 @@ export default function ExpensesPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-ink-muted">Foto bukti</Label>
-                  <Input type="file" accept="image/*" onChange={handlePhotoChange} />
+                  <PhotoInput
+                    onFile={handlePhotoChange}
+                    label="foto"
+                    maxMB={10}
+                    onError={(msg) => setError(msg)}
+                  />
                   {photo && (
                     <button type="button" onClick={() => setSelectedPhoto(photo)} className="mt-2 block overflow-hidden rounded-md border border-line">
                       {/* eslint-disable-next-line @next/next/no-img-element */}

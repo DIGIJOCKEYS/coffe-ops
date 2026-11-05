@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { Building2, Camera, ImageIcon, Loader2, Save } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Building2, ImageIcon, Loader2, Save } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/components/layout/role-context';
 import { createClient } from '@/lib/supabase/client';
 import { invalidateBusinessSettingsCache } from '@/hooks/use-business-settings';
+import { PhotoInput } from '@/components/shared/photo-input';
 
 type BusinessSettings = {
   id: string;
@@ -31,9 +32,6 @@ export default function BusinessPage() {
   const [bgFile, setBgFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  const logoInputRef = useRef<HTMLInputElement>(null);
-  const bgInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -62,18 +60,14 @@ export default function BusinessPage() {
     return () => { active = false; };
   }, []);
 
-  const handleImageChange = (type: 'logo' | 'bg') => (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      toast({ title: 'Ukuran file maksimal 10MB', variant: 'destructive' });
-      return;
-    }
-    const url = URL.createObjectURL(file);
-    if (type === 'logo') { setLogoFile(file); setLogoPreview(url); }
-    else { setBgFile(file); setBgPreview(url); }
-    // Reset input agar file yang sama bisa dipilih ulang
-    e.target.value = '';
+  const handleLogoFile = (file: File) => {
+    setLogoFile(file);
+    setLogoPreview(URL.createObjectURL(file));
+  };
+
+  const handleBgFile = (file: File) => {
+    setBgFile(file);
+    setBgPreview(URL.createObjectURL(file));
   };
 
   const handleSave = async () => {
@@ -83,25 +77,19 @@ export default function BusinessPage() {
     }
     if (!user?.id) return;
     setSaving(true);
-
     try {
       const supabase = createClient();
       let logoUrl = settings?.logo_url ?? null;
       let bgUrl = settings?.background_url ?? null;
 
       if (logoFile) {
-        const { error } = await supabase.storage
-          .from('business')
-          .upload(`logo-${user.id}`, logoFile, { upsert: true });
+        const { error } = await supabase.storage.from('business').upload(`logo-${user.id}`, logoFile, { upsert: true });
         if (error) throw new Error(error.message);
         logoUrl = supabase.storage.from('business').getPublicUrl(`logo-${user.id}`).data.publicUrl;
         setLogoFile(null);
       }
-
       if (bgFile) {
-        const { error } = await supabase.storage
-          .from('business')
-          .upload(`background-${user.id}`, bgFile, { upsert: true });
+        const { error } = await supabase.storage.from('business').upload(`background-${user.id}`, bgFile, { upsert: true });
         if (error) throw new Error(error.message);
         bgUrl = supabase.storage.from('business').getPublicUrl(`background-${user.id}`).data.publicUrl;
         setBgFile(null);
@@ -123,16 +111,10 @@ export default function BusinessPage() {
         if (data) setSettings(data);
       }
 
-      // Invalidate cache agar sidebar langsung pakai data terbaru
       invalidateBusinessSettingsCache();
-
       toast({ title: 'Pengaturan bisnis berhasil disimpan' });
     } catch (err) {
-      toast({
-        title: 'Gagal menyimpan',
-        description: err instanceof Error ? err.message : 'Coba lagi.',
-        variant: 'destructive',
-      });
+      toast({ title: 'Gagal menyimpan', description: err instanceof Error ? err.message : 'Coba lagi.', variant: 'destructive' });
     } finally {
       setSaving(false);
     }
@@ -182,42 +164,20 @@ export default function BusinessPage() {
           </div>
           <Separator className="mb-5" />
           <div className="flex items-start gap-4">
-            {/* Preview logo */}
-            <button
-              type="button"
-              onClick={() => logoInputRef.current?.click()}
-              className="group relative flex h-24 w-24 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-line bg-surface transition-colors hover:border-[#e00000]/50"
-              aria-label="Pilih logo"
-            >
+            <div className="flex h-24 w-24 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-line bg-surface">
               {logoPreview
                 ? <img src={logoPreview} alt="Logo" className="h-full w-full object-contain p-1" /> // eslint-disable-line @next/next/no-img-element
                 : <ImageIcon className="h-8 w-8 text-ink-muted/40" />
               }
-              <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 rounded-xl">
-                <Camera className="h-6 w-6 text-white" />
-              </div>
-            </button>
-
+            </div>
             <div className="space-y-2">
               <p className="text-sm text-ink-muted">PNG atau JPG, maks 10MB. Disarankan rasio 1:1.</p>
-              {/* accept="image/*" tanpa capture agar bisa pilih galeri atau ambil foto */}
-              <input
-                ref={logoInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleImageChange('logo')}
+              <PhotoInput
+                onFile={handleLogoFile}
+                label="logo"
+                maxMB={10}
+                onError={(msg) => toast({ title: msg, variant: 'destructive' })}
               />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                onClick={() => logoInputRef.current?.click()}
-              >
-                <Camera className="h-3.5 w-3.5" />
-                Pilih / Foto Logo
-              </Button>
             </div>
           </div>
         </div>
@@ -230,44 +190,19 @@ export default function BusinessPage() {
           </div>
           <Separator className="mb-5" />
           <div className="space-y-3">
-            {/* Preview background */}
-            <button
-              type="button"
-              onClick={() => bgInputRef.current?.click()}
-              className="group relative h-36 w-full overflow-hidden rounded-xl border-2 border-dashed border-line bg-surface transition-colors hover:border-[#e00000]/50"
-              aria-label="Pilih background"
-            >
+            <div className="h-36 w-full overflow-hidden rounded-xl border-2 border-dashed border-line bg-surface">
               {bgPreview
                 ? <img src={bgPreview} alt="Background" className="h-full w-full object-cover" /> // eslint-disable-line @next/next/no-img-element
-                : (
-                  <div className="flex h-full items-center justify-center">
-                    <ImageIcon className="h-10 w-10 text-ink-muted/40" />
-                  </div>
-                )
+                : <div className="flex h-full items-center justify-center"><ImageIcon className="h-10 w-10 text-ink-muted/40" /></div>
               }
-              <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                <Camera className="h-8 w-8 text-white" />
-              </div>
-            </button>
-
+            </div>
             <p className="text-sm text-ink-muted">Tampil di halaman sign-in. PNG/JPG, maks 10MB, disarankan 16:9.</p>
-            <input
-              ref={bgInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleImageChange('bg')}
+            <PhotoInput
+              onFile={handleBgFile}
+              label="background"
+              maxMB={10}
+              onError={(msg) => toast({ title: msg, variant: 'destructive' })}
             />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              onClick={() => bgInputRef.current?.click()}
-            >
-              <Camera className="h-3.5 w-3.5" />
-              Pilih / Foto Background
-            </Button>
           </div>
         </div>
 

@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Camera, Eye, ImageOff, Pencil, Plus, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { DataState } from '@/components/shared/data-state';
+import { PhotoInput } from '@/components/shared/photo-input';
 import { DateRangeFilter, type DateRange } from '@/components/shared/date-range-filter';
 import { useAuth, useRole } from '@/components/layout/role-context';
 import { Badge } from '@/components/ui/badge';
@@ -185,10 +186,7 @@ export default function StockTakesPage() {
   const [deleteTarget, setDeleteTarget] = useState<StockTake | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const handlePhoto = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) { setPhoto(undefined); setPhotoThumbnail(undefined); setPhotoProcessing(false); return; }
-    if (file.size > 1024 * 1024) { setError('Ukuran foto maksimal 1 MB.'); event.target.value = ''; return; }
+  const handlePhoto = (file: File) => {
     setPhoto(undefined); setPhotoThumbnail(undefined); setPhotoProcessing(true); setError(null);
     const reader = new FileReader();
     reader.onload = () => {
@@ -595,14 +593,17 @@ export default function StockTakesPage() {
 
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-ink-muted">Foto bukti</Label>
-                  <div className="flex items-center gap-3">
-                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-line bg-white px-3 py-2 text-sm text-ink-muted transition-colors hover:bg-background">
-                      <Camera className="h-4 w-4" />Pilih foto
-                      <input type="file" accept="image/*" onChange={handlePhoto} className="hidden" />
-                    </label>
+                  <div className="flex flex-col gap-2">
+                    <PhotoInput
+                      onFile={handlePhoto}
+                      label="foto"
+                      maxMB={10}
+                      onError={(msg) => setError(msg)}
+                      disabled={photoProcessing}
+                    />
                     {photo && (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={photo} alt="Pratinjau bukti" className="h-12 w-12 rounded-md object-cover ring-1 ring-line" />
+                      <img src={photo} alt="Pratinjau bukti" className="h-20 w-20 rounded-md object-cover ring-1 ring-line" />
                     )}
                   </div>
                   <p className="text-[11px] text-ink-muted">{photoProcessing ? 'Memproses foto…' : 'Foto bukti disimpan bersama mutasi stok.'}</p>

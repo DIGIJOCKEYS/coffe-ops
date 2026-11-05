@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
-import { Camera, KeyRound, Loader2, Phone, Save, User } from 'lucide-react';
+import { KeyRound, Loader2, Phone, Save, User } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,11 +10,11 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { createClient } from '@/lib/supabase/client';
+import { PhotoInput } from '@/components/shared/photo-input';
 
 export default function SettingsPage() {
   const { user, isLoaded } = useUser();
   const { toast } = useToast();
-  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -114,13 +114,7 @@ export default function SettingsPage() {
     }
   };
 
-  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      toast({ title: 'Ukuran foto maksimal 10MB', variant: 'destructive' });
-      return;
-    }
+  const handleAvatarChange = async (file: File) => {
     setSavingProfile(true);
     try {
       await user.setProfileImage({ file });
@@ -133,7 +127,6 @@ export default function SettingsPage() {
       });
     } finally {
       setSavingProfile(false);
-      if (avatarInputRef.current) avatarInputRef.current.value = '';
     }
   };
 
@@ -148,41 +141,23 @@ export default function SettingsPage() {
       <div className="max-w-2xl space-y-6">
 
         {/* Avatar */}
-        <div className="flex items-center gap-5 rounded-xl border border-line bg-white p-6 shadow-sm">
-          {/* accept="image/*" tanpa capture agar user bisa pilih dari galeri ATAU kamera */}
-          <input
-            ref={avatarInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleAvatarChange}
-          />
-          <button
-            type="button"
-            onClick={() => avatarInputRef.current?.click()}
-            disabled={savingProfile}
-            className="group relative flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#e00000] text-white ring-4 ring-[#e00000]/10 transition-opacity hover:opacity-90 disabled:opacity-60"
-            aria-label="Ganti foto profil"
-          >
+        <div className="flex items-start gap-5 rounded-xl border border-line bg-white p-6 shadow-sm">
+          <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#e00000] text-white ring-4 ring-[#e00000]/10">
             {avatar
               ? <img src={avatar} alt={name} className="h-full w-full object-cover" /> // eslint-disable-line @next/next/no-img-element
               : <span className="text-2xl font-bold">{initials}</span>
             }
-            <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-              <Camera className="h-6 w-6 text-white" />
-            </div>
-          </button>
-          <div>
+          </div>
+          <div className="space-y-2">
             <p className="font-semibold text-ink">{name || 'Pengguna'}</p>
             <p className="text-sm text-ink-muted">{email}</p>
-            <button
-              type="button"
-              onClick={() => avatarInputRef.current?.click()}
+            <PhotoInput
+              onFile={handleAvatarChange}
+              label="foto profil"
+              maxMB={10}
+              onError={(msg) => toast({ title: msg, variant: 'destructive' })}
               disabled={savingProfile}
-              className="mt-1.5 text-xs text-[#e00000] hover:underline disabled:opacity-50"
-            >
-              Ganti foto profil
-            </button>
+            />
           </div>
         </div>
 
