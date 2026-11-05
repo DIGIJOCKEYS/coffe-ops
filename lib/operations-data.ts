@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
-import type { Session } from '@clerk/nextjs/server';
+import type { SessionResource } from '@clerk/types';
 import type {
   AuditEntry,
   DailySales,
@@ -18,13 +18,13 @@ import type {
 } from '@/types/operations';
 
 // Singleton: simpan Clerk session dari AuthProvider
-let _session: Session | null | undefined;
+let _session: SessionResource | null | undefined;
 
 /**
  * Daftarkan Clerk session dari AuthProvider.
  * Panggil ini dari useEffect di AuthProvider ketika session berubah.
  */
-export function setClerkSession(session: Session | null | undefined) {
+export function setClerkSession(session: SessionResource | null | undefined) {
   _session = session;
 }
 

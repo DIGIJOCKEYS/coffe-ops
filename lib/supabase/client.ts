@@ -1,5 +1,5 @@
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
-import type { Session } from '@clerk/nextjs/server';
+import type { SessionResource } from '@clerk/types';
 
 /**
  * Buat Supabase client untuk Client Components dengan Clerk auth.
@@ -10,7 +10,7 @@ import type { Session } from '@clerk/nextjs/server';
  *
  * @param session - Clerk session dari useSession() hook
  */
-export function createClient(session?: Session | null) {
+export function createClient(session?: SessionResource | null) {
   return createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
