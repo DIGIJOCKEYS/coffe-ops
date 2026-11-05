@@ -1,10 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Eye, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Eye, Plus, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { DataState } from '@/components/shared/data-state';
 import { DateRangeFilter, type DateRange } from '@/components/shared/date-range-filter';
+import { DeleteConfirmDialog } from '@/components/shared/delete-confirm-dialog';
 import { useAuth, useRole } from '@/components/layout/role-context';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,7 +31,6 @@ import {
   fetchSaleMenus,
   fetchShiftSales,
   todayJakarta,
-  updateShiftSale,
 } from '@/lib/operations-data';
 import type { SalesLine, Shift, ShiftSales } from '@/types/operations';
 import { useSupabaseQuery } from '@/hooks/use-supabase-query';
@@ -39,8 +39,8 @@ const SHIFTS: Shift[] = ['pagi-siang', 'siang-sore'];
 const SHIFT_LABEL: Record<Shift, string> = { 'pagi-siang': 'Pagi–Siang', 'siang-sore': 'Siang–Sore' };
 const DATE_FORMAT = new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
 
-type DraftLine = { itemId: string; name: string; price: number; qty: number };
-const emptyLine = (): DraftLine => ({ itemId: '', name: '', price: 0, qty: 1 });
+type DraftLine = { itemId: string; name: string; price: number; qty: number | '' };
+const emptyLine = (): DraftLine => ({ itemId: '', name: '', price: 0, qty: '' });
 
 export default function SalesPage() {
   const { toast } = useToast();
@@ -75,20 +75,10 @@ export default function SalesPage() {
   const [notes, setNotes] = useState('');
   const [lines, setLines] = useState<DraftLine[]>([emptyLine()]);
   const [error, setError] = useState<string | null>(null);
-  const draftTotal = lines.reduce((sum, l) => sum + (l.itemId ? l.qty * l.price : 0), 0);
+  const draftTotal = lines.reduce((sum, l) => sum + (l.itemId && typeof l.qty === 'number' ? l.qty * l.price : 0), 0);
 
   // ── detail view state ──────────────────────────────────────────────────────
   const [detailRecord, setDetailRecord] = useState<ShiftSales | null>(null);
-
-  // ── edit state ─────────────────────────────────────────────────────────────
-  const [editRecord, setEditRecord] = useState<ShiftSales | null>(null);
-  const [editDate, setEditDate] = useState('');
-  const [editShift, setEditShift] = useState<Shift>('pagi-siang');
-  const [editNotes, setEditNotes] = useState('');
-  const [editLines, setEditLines] = useState<DraftLine[]>([emptyLine()]);
-  const [editSaving, setEditSaving] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
-  const editTotal = editLines.reduce((sum, l) => sum + (l.itemId ? l.qty * l.price : 0), 0);
 
   // ── delete confirm state ───────────────────────────────────────────────────
   const [deleteTarget, setDeleteTarget] = useState<ShiftSales | null>(null);
@@ -101,24 +91,26 @@ export default function SalesPage() {
 
   const updateLine = (index: number, patch: Partial<DraftLine>) =>
     setLines((prev) => prev.map((l, i) => (i === index ? { ...l, ...patch } : l)));
-  const updateEditLine = (index: number, patch: Partial<DraftLine>) =>
-    setEditLines((prev) => prev.map((l, i) => (i === index ? { ...l, ...patch } : l)));
 
   const onItemSelect = (index: number, itemId: string) => {
     const item = menus.find((m) => m.id === itemId);
-    if (item) { updateLine(index, { itemId: item.id, name: item.name, price: item.price }); setError(null); }
-  };
-  const onEditItemSelect = (index: number, itemId: string) => {
-    const item = menus.find((m) => m.id === itemId);
-    if (item) { updateEditLine(index, { itemId: item.id, name: item.name, price: item.price }); setEditError(null); }
+    if (item) {
+      updateLine(index, { itemId: item.id, name: item.name, price: item.price });
+      setError(null);
+    }
   };
 
   const handleSubmit = async () => {
-    const validLines = lines.filter((l) => l.itemId && Number.isFinite(l.qty) && l.qty > 0);
+    const validLines = lines.filter((l) => l.itemId && l.qty !== '' && Number(l.qty) > 0);
     if (!validLines.length) { setError('Tambahkan minimal satu menu.'); return; }
     if (!user?.id) { setError('Sesi pengguna tidak ditemukan.'); return; }
 
-    const salesLines: SalesLine[] = validLines.map(({ itemId, name, qty, price }) => ({ itemId, name, qty, price }));
+    const salesLines: SalesLine[] = validLines.map(({ itemId, name, qty, price }) => ({
+      itemId,
+      name,
+      qty: Number(qty),
+      price,
+    }));
     setSaving(true);
     try {
       const savedTotal = await createShiftSale({ date, shift, notes: notes.trim() || undefined, lines: salesLines, userId: user.id });
@@ -132,46 +124,26 @@ export default function SalesPage() {
     } finally { setSaving(false); }
   };
 
-  const openEdit = (record: ShiftSales) => {
-    setEditRecord(record);
-    setEditDate(record.date);
-    setEditShift(record.shift);
-    setEditNotes(record.notes ?? '');
-    setEditLines(record.lines.map((l) => ({ itemId: l.itemId, name: l.name, price: l.price, qty: l.qty })));
-    setEditError(null);
-  };
-
-  const handleEdit = async () => {
-    if (!editRecord || !user?.id) return;
-    const validLines = editLines.filter((l) => l.itemId && Number.isFinite(l.qty) && l.qty > 0);
-    if (!validLines.length) { setEditError('Tambahkan minimal satu menu.'); return; }
-    const salesLines: SalesLine[] = validLines.map(({ itemId, name, qty, price }) => ({ itemId, name, qty, price }));
-    setEditSaving(true);
-    try {
-      const newTotal = await updateShiftSale(
-        editRecord.id,
-        { date: editDate, shift: editShift, notes: editNotes.trim() || undefined, lines: salesLines },
-        user.id,
-        profile?.name ?? user.fullName ?? 'Pengguna',
-      );
-      await refresh();
-      toast({ title: 'Penjualan diperbarui', description: `${SHIFT_LABEL[editShift]} · ${formatRupiah(newTotal)}` });
-      setEditRecord(null);
-    } catch (cause) {
-      setEditError(cause instanceof Error ? cause.message : 'Gagal memperbarui penjualan.');
-    } finally { setEditSaving(false); }
-  };
-
-  const handleDelete = async () => {
+  const handleDelete = async (reason: string) => {
     if (!deleteTarget || !user?.id) return;
     setDeleting(true);
     try {
-      await deleteShiftSale(deleteTarget.id, user.id, profile?.name ?? user.fullName ?? 'Pengguna');
-      await refresh();
-      toast({ title: 'Penjualan dihapus' });
+      await deleteShiftSale(
+        deleteTarget.id,
+        user.id,
+        profile?.name ?? user.fullName ?? 'Pengguna',
+        reason,
+      );
+      await Promise.all([refresh(), refreshMenus()]);
+      toast({ title: 'Penjualan shift dihapus', description: `Stok outlet telah dikembalikan.` });
       setDeleteTarget(null);
     } catch (cause) {
-      toast({ title: 'Gagal menghapus', description: cause instanceof Error ? cause.message : 'Terjadi kesalahan.', variant: 'destructive' });
+      toast({
+        title: 'Gagal menghapus',
+        description: cause instanceof Error ? cause.message : 'Terjadi kesalahan.',
+        variant: 'destructive',
+      });
+      throw cause;
     } finally { setDeleting(false); }
   };
 
@@ -242,14 +214,15 @@ export default function SalesPage() {
                                 <Eye className="h-4 w-4" />
                               </Button>
                               {canModify && (
-                                <>
-                                  <Button variant="ghost" size="sm" onClick={() => openEdit(record)} aria-label="Edit">
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                  <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={() => setDeleteTarget(record)} aria-label="Hapus">
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-red-600 hover:text-red-700"
+                                  onClick={() => setDeleteTarget(record)}
+                                  aria-label="Hapus"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
                               )}
                             </div>
                           </TableCell>
@@ -307,95 +280,16 @@ export default function SalesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ─── Edit Dialog ───────────────────────────────────────────────────── */}
-      <Dialog open={Boolean(editRecord)} onOpenChange={(v) => { if (!v) setEditRecord(null); }}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Edit Penjualan Shift</DialogTitle>
-            <DialogDescription>Perbarui detail penjualan shift.</DialogDescription>
-          </DialogHeader>
-          {menuLoading ? (
-            <p className="py-4 text-sm text-ink-muted">Memuat menu…</p>
-          ) : menuError ? (
-            <p className="py-4 text-sm text-brand-dark">{menuError}</p>
-          ) : (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-ink-muted">Tanggal</Label>
-                  <Input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-ink-muted">Shift</Label>
-                  <Select value={editShift} onValueChange={(v) => setEditShift(v as Shift)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {SHIFTS.map((v) => <SelectItem key={v} value={v}>{SHIFT_LABEL[v]}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-ink-muted">Rincian menu</Label>
-                {editLines.map((line, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <Select value={line.itemId} onValueChange={(v) => onEditItemSelect(idx, v)}>
-                      <SelectTrigger className="flex-1"><SelectValue placeholder="Pilih menu" /></SelectTrigger>
-                      <SelectContent>
-                        {menus.map((m) => <SelectItem key={m.id} value={m.id}>{m.name} · {formatRupiah(m.price)}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <Input type="number" min={1} step={1} value={line.qty}
-                      onChange={(e) => updateEditLine(idx, { qty: Number(e.target.value) })} className="w-20" />
-                    <span className="hidden w-20 shrink-0 text-right text-sm tabular-nums text-ink-muted sm:block">
-                      {line.itemId ? formatRupiah(line.qty * line.price) : '—'}
-                    </span>
-                    <Button type="button" variant="ghost" size="icon"
-                      onClick={() => setEditLines((prev) => prev.filter((_, i) => i !== idx))}
-                      disabled={editLines.length === 1}>
-                      <Trash2 className="h-4 w-4 text-ink-muted" />
-                    </Button>
-                  </div>
-                ))}
-                <Button type="button" variant="outline" size="sm" onClick={() => setEditLines((prev) => [...prev, emptyLine()])}>
-                  <Plus className="h-4 w-4" />Tambah menu
-                </Button>
-              </div>
-              <div className="flex items-center justify-between rounded-lg border border-line bg-ink-50/40 px-4 py-3">
-                <span className="text-sm font-medium text-ink">Total</span>
-                <span className="text-lg font-bold text-ink">{formatRupiah(editTotal)}</span>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-ink-muted">Catatan</Label>
-                <Input value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="Catatan (opsional)" />
-              </div>
-              {editError && <p className="text-sm text-brand-dark">{editError}</p>}
-            </div>
-          )}
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setEditRecord(null)}>Batal</Button>
-            <Button onClick={handleEdit} disabled={editSaving || menuLoading}>{editSaving ? 'Menyimpan...' : 'Simpan'}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ─── Delete Confirm Dialog ──────────────────────────────────────────── */}
-      <Dialog open={Boolean(deleteTarget)} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Hapus Penjualan</DialogTitle>
-            <DialogDescription>
-              Yakin ingin menghapus penjualan <strong>{deleteTarget ? SHIFT_LABEL[deleteTarget.shift] : ''}</strong>{' '}
-              tanggal {deleteTarget ? DATE_FORMAT.format(new Date(deleteTarget.date)) : ''}?
-              Tindakan ini tidak dapat dibatalkan.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Batal</Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>{deleting ? 'Menghapus...' : 'Hapus'}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* ─── Delete Confirm Dialog dengan Alasan ───────────────────────── */}
+      <DeleteConfirmDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}
+        title="Hapus Penjualan Shift"
+        description={`Penjualan shift ${deleteTarget ? SHIFT_LABEL[deleteTarget.shift] : ''} tanggal ${deleteTarget ? DATE_FORMAT.format(new Date(deleteTarget.date)) : ''} senilai ${deleteTarget ? formatRupiah(deleteTarget.total) : ''} akan dihapus. Stok outlet untuk menu-menu terkait akan dipulihkan secara otomatis.`}
+        itemName={deleteTarget ? `${SHIFT_LABEL[deleteTarget.shift]} · ${formatRupiah(deleteTarget.total)}` : undefined}
+        onConfirm={handleDelete}
+        loading={deleting}
+      />
 
       {/* ─── Create Dialog ─────────────────────────────────────────────────── */}
       <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
@@ -432,10 +326,21 @@ export default function SalesPage() {
                         {menus.map((m) => <SelectItem key={m.id} value={m.id}>{m.name} · {formatRupiah(m.price)}</SelectItem>)}
                       </SelectContent>
                     </Select>
-                    <Input type="number" min={1} step={1} value={line.qty}
-                      onChange={(e) => updateLine(idx, { qty: Number(e.target.value) })} className="w-20" aria-label="Jumlah" />
+                    <Input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={line.qty}
+                      placeholder="1"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        updateLine(idx, { qty: val === '' ? '' : Math.max(1, parseInt(val, 10) || 1) });
+                      }}
+                      className="w-20"
+                      aria-label="Jumlah"
+                    />
                     <span className="hidden w-20 shrink-0 text-right text-sm tabular-nums text-ink-muted sm:block">
-                      {line.itemId ? formatRupiah(line.qty * line.price) : '—'}
+                      {line.itemId && line.qty !== '' ? formatRupiah(Number(line.qty) * line.price) : '—'}
                     </span>
                     <Button type="button" variant="ghost" size="icon"
                       onClick={() => setLines((prev) => prev.filter((_, i) => i !== idx))}

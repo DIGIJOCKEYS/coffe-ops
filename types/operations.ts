@@ -56,7 +56,7 @@ export type Expense = {
   createdAt?: string;
 };
 
-export type StockTakeKind = 'transfer' | 'pemakaian' | 'rusak';
+export type StockTakeKind = 'transfer' | 'rusak' | 'outlet_to_warehouse' | 'pemakaian';
 export type StockTake = {
   id: string;
   datetime: string;

@@ -1,9 +1,7 @@
 'use client';
 
-import { Pencil } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { StockStatusBadge } from '@/components/shared/stock-status-badge';
 import { formatNumber, formatRupiah } from '@/lib/format';
 import { getStockStatus } from '@/lib/stock';
@@ -11,14 +9,10 @@ import type { StockItem } from '@/types/operations';
 
 export function StockDetailSheet({
   item,
-  canEdit,
   onOpenChange,
-  onEdit,
 }: {
   item: StockItem | null;
-  canEdit: boolean;
   onOpenChange: (open: boolean) => void;
-  onEdit: () => void;
 }) {
   const status = item ? getStockStatus(item) : 'aman';
   const percent = item && item.minStock > 0 ? Math.min((item.outletStock / item.minStock) * 100, 100) : 0;
@@ -71,15 +65,6 @@ export function StockDetailSheet({
               </div>
             </dl>
           </div>
-        )}
-
-        {canEdit && (
-          <SheetFooter>
-            <Button className="w-full" onClick={onEdit}>
-              <Pencil className="h-4 w-4" />
-              Edit Stok & Menu
-            </Button>
-          </SheetFooter>
         )}
       </SheetContent>
     </Sheet>

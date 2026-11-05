@@ -754,218 +754,64 @@ export function formatAuditTime(value: string): string {
   return AUDIT_TIME_FORMAT.format(new Date(value));
 }
 
-// ─── DELETE / UPDATE SHIFT SALE ──────────────────────────────────────────────
+// ─── ATOMIC DELETE DENGAN ALASAN & AUDIT LOG ─────────────────────────────────
 
-export async function deleteShiftSale(saleId: string, userId: string, userName: string): Promise<void> {
-  const supabase = getSupabaseClient();
-  // Fetch sale info for audit first
-  const { data: saleRow, error: fetchErr } = await supabase
-    .from('shift_sales')
-    .select('date, shift, total')
-    .eq('id', saleId)
-    .maybeSingle();
-  throwIfError(fetchErr);
-
-  // Fetch lines before deletion to restore outlet stock
-  const { data: lineRows } = await supabase
-    .from('sales_lines')
-    .select('item_id, qty')
-    .eq('sale_id', saleId);
-
-  // Delete lines first (cascade might handle this, but explicit is safer)
-  const { error: linesErr } = await supabase.from('sales_lines').delete().eq('sale_id', saleId);
-  throwIfError(linesErr);
-
-  const { error: saleErr } = await supabase.from('shift_sales').delete().eq('id', saleId);
-  throwIfError(saleErr);
-
-  // Restore outlet stock for returned items
-  if (lineRows && lineRows.length > 0) {
-    for (const line of lineRows) {
-      if (line.item_id && line.qty > 0) {
-        const { data: item } = await supabase
-          .from('stock_items')
-          .select('outlet_stock')
-          .eq('id', line.item_id)
-          .single();
-        if (item) {
-          await supabase
-            .from('stock_items')
-            .update({
-              outlet_stock: Number(item.outlet_stock) + Number(line.qty),
-              updated_at: new Date().toISOString(),
-              updated_by: userId,
-            })
-            .eq('id', line.item_id);
-        }
-      }
-    }
-  }
-
-  if (saleRow) {
-    await addAudit(userId, userName, `Menghapus penjualan ${saleRow.shift} tanggal ${saleRow.date} total Rp${saleRow.total}`, 'Penjualan', { sale_id: saleId });
-  }
+export async function deleteStockItem(
+  itemId: string,
+  userId: string,
+  userName: string,
+  reason: string,
+): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('delete_stock_item_with_reason', {
+    p_item_id: itemId,
+    p_user_id: userId,
+    p_user_name: userName,
+    p_reason: reason.trim(),
+  });
+  throwIfError(error);
 }
 
-export async function updateShiftSale(
+export async function deleteShiftSale(
   saleId: string,
-  input: { date: string; shift: Shift; notes?: string; lines: SalesLine[] },
   userId: string,
   userName: string,
-): Promise<number> {
-  const supabase = getSupabaseClient();
-  // Recalculate total
-  const total = input.lines.reduce((sum, l) => sum + l.qty * l.price, 0);
-
-  // Fetch old lines to adjust stock difference
-  const { data: oldLines } = await supabase
-    .from('sales_lines')
-    .select('item_id, qty')
-    .eq('sale_id', saleId);
-
-  // Fetch unit_costs for items
-  const itemIds = Array.from(new Set(input.lines.map((l) => l.itemId).filter(Boolean)));
-  const { data: stockItems } = itemIds.length > 0
-    ? await supabase.from('stock_items').select('id, unit_cost').in('id', itemIds)
-    : { data: [] };
-  const costMap = new Map((stockItems ?? []).map((i) => [i.id, Number(i.unit_cost)]));
-
-  const { error: saleErr } = await supabase
-    .from('shift_sales')
-    .update({ date: input.date, shift: input.shift, notes: input.notes ?? null, total })
-    .eq('id', saleId);
-  throwIfError(saleErr);
-
-  // Replace lines
-  const { error: delErr } = await supabase.from('sales_lines').delete().eq('sale_id', saleId);
-  throwIfError(delErr);
-
-  const newLines = input.lines.map((l) => ({
-    sale_id: saleId,
-    item_id: l.itemId,
-    name: l.name,
-    qty: l.qty,
-    price: l.price,
-    unit_cost: costMap.get(l.itemId) ?? l.unitCost ?? 0,
-  }));
-  const { error: insErr } = await supabase.from('sales_lines').insert(newLines);
-  throwIfError(insErr);
-
-  // Adjust stock delta: old qty returned (+), new qty deducted (-)
-  const oldQtyMap = new Map<string, number>();
-  for (const ol of oldLines ?? []) {
-    if (ol.item_id) oldQtyMap.set(ol.item_id, (oldQtyMap.get(ol.item_id) ?? 0) + Number(ol.qty));
-  }
-  const newQtyMap = new Map<string, number>();
-  for (const nl of input.lines) {
-    if (nl.itemId) newQtyMap.set(nl.itemId, (newQtyMap.get(nl.itemId) ?? 0) + Number(nl.qty));
-  }
-  const allAffected = new Set([...oldQtyMap.keys(), ...newQtyMap.keys()]);
-  for (const itemId of allAffected) {
-    const diff = (oldQtyMap.get(itemId) ?? 0) - (newQtyMap.get(itemId) ?? 0);
-    if (diff !== 0) {
-      const { data: item } = await supabase.from('stock_items').select('outlet_stock').eq('id', itemId).single();
-      if (item) {
-        await supabase
-          .from('stock_items')
-          .update({
-            outlet_stock: Math.max(0, Number(item.outlet_stock) + diff),
-            updated_at: new Date().toISOString(),
-            updated_by: userId,
-          })
-          .eq('id', itemId);
-      }
-    }
-  }
-
-  await addAudit(userId, userName, `Mengedit penjualan ${input.shift} tanggal ${input.date}`, 'Penjualan', { sale_id: saleId });
-  return total;
-}
-
-// ─── DELETE / UPDATE EXPENSE ─────────────────────────────────────────────────
-
-export async function deleteExpense(expenseId: string, userId: string, userName: string): Promise<void> {
-  const supabase = getSupabaseClient();
-  const { data: row, error: fetchErr } = await supabase
-    .from('expenses')
-    .select('description, amount')
-    .eq('id', expenseId)
-    .maybeSingle();
-  throwIfError(fetchErr);
-
-  const { error } = await supabase.from('expenses').delete().eq('id', expenseId);
+  reason: string,
+): Promise<void> {
+  const { error } = await getSupabaseClient().rpc('delete_shift_sale_with_reason', {
+    p_sale_id: saleId,
+    p_user_id: userId,
+    p_user_name: userName,
+    p_reason: reason.trim(),
+  });
   throwIfError(error);
-
-  if (row) {
-    await addAudit(userId, userName, `Menghapus pengeluaran "${row.description}" Rp${row.amount}`, 'Pengeluaran', { expense_id: expenseId });
-  }
 }
 
-export async function updateExpense(
+export async function deleteExpense(
   expenseId: string,
-  input: { date: string; description: string; category: ExpenseCategory; amount: number },
   userId: string,
   userName: string,
+  reason: string,
 ): Promise<void> {
-  const { error } = await getSupabaseClient()
-    .from('expenses')
-    .update({ date: input.date, description: input.description, category: input.category, amount: input.amount })
-    .eq('id', expenseId);
+  const { error } = await getSupabaseClient().rpc('delete_expense_with_reason', {
+    p_expense_id: expenseId,
+    p_user_id: userId,
+    p_user_name: userName,
+    p_reason: reason.trim(),
+  });
   throwIfError(error);
-  await addAudit(userId, userName, `Mengedit pengeluaran "${input.description}" Rp${input.amount}`, 'Pengeluaran', { expense_id: expenseId });
 }
 
-// ─── DELETE / UPDATE STOCK TAKE (MUTASI STOK) ────────────────────────────────
-
-export async function deleteStockTake(takeId: string, userId: string, userName: string): Promise<void> {
-  const supabase = getSupabaseClient();
-  const { data: row, error: fetchErr } = await supabase
-    .from('stock_takes')
-    .select('item_id, item_name, qty, kind')
-    .eq('id', takeId)
-    .maybeSingle();
-  throwIfError(fetchErr);
-
-  const { error } = await supabase.from('stock_takes').delete().eq('id', takeId);
-  throwIfError(error);
-
-  if (row) {
-    if (row.item_id) {
-      const { data: item } = await supabase.from('stock_items').select('stock, outlet_stock').eq('id', row.item_id).single();
-      if (item) {
-        if (row.kind === 'transfer') {
-          // Reverse transfer: return to warehouse, deduct from outlet
-          await supabase.from('stock_items').update({
-            stock: Number(item.stock) + Number(row.qty),
-            outlet_stock: Math.max(0, Number(item.outlet_stock) - Number(row.qty)),
-            updated_at: new Date().toISOString(),
-            updated_by: userId,
-          }).eq('id', row.item_id);
-        } else if (row.kind === 'rusak' || row.kind === 'pemakaian') {
-          // Reverse damage: return to outlet stock
-          await supabase.from('stock_items').update({
-            outlet_stock: Number(item.outlet_stock) + Number(row.qty),
-            updated_at: new Date().toISOString(),
-            updated_by: userId,
-          }).eq('id', row.item_id);
-        }
-      }
-    }
-
-    await addAudit(userId, userName, `Menghapus mutasi stok ${row.kind} ${row.item_name} sebanyak ${row.qty}`, 'Mutasi Stok', { stock_take_id: takeId });
-  }
-}
-
-export async function updateStockTake(
+export async function deleteStockTake(
   takeId: string,
-  input: { qty: number; reason?: string; notes?: string },
   userId: string,
   userName: string,
+  reason: string,
 ): Promise<void> {
-  const { error } = await getSupabaseClient()
-    .from('stock_takes')
-    .update({ qty: input.qty, reason: input.reason ?? null, notes: input.notes ?? null })
-    .eq('id', takeId);
+  const { error } = await getSupabaseClient().rpc('delete_stock_take_with_reason', {
+    p_take_id: takeId,
+    p_user_id: userId,
+    p_user_name: userName,
+    p_reason: reason.trim(),
+  });
   throwIfError(error);
-  await addAudit(userId, userName, `Mengedit mutasi stok id ${takeId}`, 'Mutasi Stok', { stock_take_id: takeId });
 }

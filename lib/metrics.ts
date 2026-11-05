@@ -30,32 +30,45 @@ export function estimateLossCost(stockTakes: StockTake[]): number {
 }
 
 // ─── Ringkasan harian ─────────────────────────────────────────────────────────
-// Estimasi laba = Omzet − HPP (transfer) − Kerugian (rusak) − Pengeluaran operasional
-// Pembelian Stok dan Kerugian Stok dari expenses TIDAK dihitung ulang di sini
-// karena sudah diperhitungkan dari stock_takes secara langsung (lebih akurat).
+// Estimasi laba = Omzet − HPP − Kerugian (rusak/tumpah) − Pengeluaran Operasional − Pengeluaran Lainnya
 export function summarizeToday(
   sales: ShiftSales[],
   items: StockItem[],
   expenses: Expense[],
   stockTakes: StockTake[] = [],
 ) {
-  const omzet         = sumShiftTotal(sales);
-  const portions      = countPortions(sales);
+  const omzet    = sumShiftTotal(sales);
+  const portions = countPortions(sales);
 
-  // HPP dari transfer ke outlet (modal yang keluar)
-  const transferCost  = estimateTransferCost(stockTakes);
+  // HPP dari transfer modal ke outlet
+  const transferCost = estimateTransferCost(stockTakes);
 
   // Kerugian dari rusak / tumpah
-  const lossCost      = estimateLossCost(stockTakes);
+  const lossCostFromTakes = estimateLossCost(stockTakes);
+  const lossCostFromExpenses = expenses
+    .filter((e) => e.category === 'Kerugian Stok')
+    .reduce((sum, e) => sum + e.amount, 0);
+  const lossCost = lossCostFromTakes > 0 ? lossCostFromTakes : lossCostFromExpenses;
 
-  // Pengeluaran operasional (Operasional + Lainnya — bukan Pembelian Stok & bukan Kerugian Stok)
-  const operatingCost = expenses
-    .filter((e) => e.category === 'Operasional' || e.category === 'Lainnya')
+  // Breakdown masing-masing kategori pengeluaran
+  const stockExpense = expenses
+    .filter((e) => e.category === 'Pembelian Stok')
     .reduce((sum, e) => sum + e.amount, 0);
 
-  // HPP "lama" dari penjualan (fallback jika tidak ada transfer tercatat)
-  const itemCost      = new Map(items.map((item) => [item.id, item.unitCost]));
-  const estimatedHpp  = transferCost > 0
+  const operationalExpense = expenses
+    .filter((e) => e.category === 'Operasional')
+    .reduce((sum, e) => sum + e.amount, 0);
+
+  const otherExpense = expenses
+    .filter((e) => e.category === 'Lainnya')
+    .reduce((sum, e) => sum + e.amount, 0);
+
+  const operatingCost = operationalExpense;
+  const totalExpense = stockExpense + operationalExpense + otherExpense + lossCost;
+
+  // HPP modal
+  const itemCost = new Map(items.map((item) => [item.id, item.unitCost]));
+  const estimatedHpp = transferCost > 0
     ? transferCost
     : sales.reduce(
         (sum, shift) =>
@@ -66,9 +79,21 @@ export function summarizeToday(
         0,
       );
 
-  const estimatedProfit = omzet - estimatedHpp - lossCost - operatingCost;
+  const estimatedProfit = omzet - estimatedHpp - lossCost - operationalExpense - otherExpense;
 
-  return { omzet, portions, estimatedHpp, transferCost, lossCost, operatingCost, estimatedProfit };
+  return {
+    omzet,
+    portions,
+    estimatedHpp,
+    transferCost,
+    lossCost,
+    operatingCost,
+    stockExpense,
+    operationalExpense,
+    otherExpense,
+    totalExpense,
+    estimatedProfit,
+  };
 }
 
 // Persentase perubahan omzet hari ini dibanding kemarin.

@@ -1,11 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Eye, Image as ImageIcon, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Eye, Image as ImageIcon, Plus, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { DataState } from '@/components/shared/data-state';
 import { PhotoInput } from '@/components/shared/photo-input';
 import { DateRangeFilter, type DateRange } from '@/components/shared/date-range-filter';
+import { DeleteConfirmDialog } from '@/components/shared/delete-confirm-dialog';
+import { processAndCompressImage } from '@/lib/image-compression';
 import { useAuth, useRole } from '@/components/layout/role-context';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -32,7 +34,6 @@ import {
   fetchExpensePhotoPreview,
   fetchExpensesPage,
   todayJakarta,
-  updateExpense,
 } from '@/lib/operations-data';
 import type { Expense, ExpenseCategory } from '@/types/operations';
 import { useSupabaseQuery } from '@/hooks/use-supabase-query';
@@ -139,15 +140,6 @@ export default function ExpensesPage() {
   // ── detail state ───────────────────────────────────────────────────────────
   const [detailRecord, setDetailRecord] = useState<Expense | null>(null);
 
-  // ── edit state ─────────────────────────────────────────────────────────────
-  const [editRecord, setEditRecord] = useState<Expense | null>(null);
-  const [editDate, setEditDate] = useState('');
-  const [editDesc, setEditDesc] = useState('');
-  const [editCategory, setEditCategory] = useState<ExpenseCategory>('Operasional');
-  const [editAmount, setEditAmount] = useState('');
-  const [editError, setEditError] = useState<string | null>(null);
-  const [editSaving, setEditSaving] = useState(false);
-
   // ── delete confirm state ───────────────────────────────────────────────────
   const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -157,26 +149,15 @@ export default function ExpensesPage() {
     setAmount(''); setPhoto(null); setPhotoThumbnail(null); setError(null);
   };
 
-  const handlePhotoChange = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = () => setPhoto(typeof reader.result === 'string' ? reader.result : null);
-    reader.onerror = () => setError('Foto gagal dibaca.');
-    reader.readAsDataURL(file);
-
-    const objectUrl = URL.createObjectURL(file);
-    const img = new window.Image();
-    img.onload = () => {
-      const maxEdge = 240;
-      const scale = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
-      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
-      const ctx = canvas.getContext('2d');
-      if (ctx) { ctx.drawImage(img, 0, 0, canvas.width, canvas.height); setPhotoThumbnail(canvas.toDataURL('image/jpeg', 0.65)); }
-      URL.revokeObjectURL(objectUrl);
-    };
-    img.onerror = () => { setPhotoThumbnail(null); URL.revokeObjectURL(objectUrl); };
-    img.src = objectUrl;
+  const handlePhotoChange = async (file: File) => {
+    try {
+      setError(null);
+      const { photo: compressedPhoto, thumbnail } = await processAndCompressImage(file);
+      setPhoto(compressedPhoto);
+      setPhotoThumbnail(thumbnail);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Foto gagal diproses.');
+    }
   };
 
   const handleSubmit = async () => {
@@ -200,46 +181,22 @@ export default function ExpensesPage() {
     } finally { setSaving(false); }
   };
 
-  const openEdit = (record: Expense) => {
-    setEditRecord(record);
-    setEditDate(record.date);
-    setEditDesc(record.description);
-    setEditCategory(record.category);
-    setEditAmount(String(record.amount));
-    setEditError(null);
-  };
-
-  const handleEdit = async () => {
-    if (!editRecord || !user?.id) return;
-    const amountNum = parseRupiahInput(editAmount);
-    if (!editDesc.trim()) { setEditError('Deskripsi wajib diisi.'); return; }
-    if (!Number.isFinite(amountNum) || amountNum <= 0) { setEditError('Jumlah harus lebih dari 0.'); return; }
-    setEditSaving(true);
-    try {
-      await updateExpense(
-        editRecord.id,
-        { date: editDate, description: editDesc.trim(), category: isAdmin ? editCategory : 'Operasional', amount: amountNum },
-        user.id,
-        profile?.name ?? user.fullName ?? 'Pengguna',
-      );
-      await refresh();
-      toast({ title: 'Pengeluaran diperbarui', description: editDesc.trim() });
-      setEditRecord(null);
-    } catch (cause) {
-      setEditError(cause instanceof Error ? cause.message : 'Gagal memperbarui pengeluaran.');
-    } finally { setEditSaving(false); }
-  };
-
-  const handleDelete = async () => {
+  const handleDelete = async (reason: string) => {
     if (!deleteTarget || !user?.id) return;
     setDeleting(true);
     try {
-      await deleteExpense(deleteTarget.id, user.id, profile?.name ?? user.fullName ?? 'Pengguna');
+      await deleteExpense(
+        deleteTarget.id,
+        user.id,
+        profile?.name ?? user.fullName ?? 'Pengguna',
+        reason,
+      );
       await refresh();
       toast({ title: 'Pengeluaran dihapus', description: deleteTarget.description });
       setDeleteTarget(null);
     } catch (cause) {
       toast({ title: 'Gagal menghapus', description: cause instanceof Error ? cause.message : 'Terjadi kesalahan.', variant: 'destructive' });
+      throw cause;
     } finally { setDeleting(false); }
   };
 
@@ -322,9 +279,6 @@ export default function ExpensesPage() {
                             <Button variant="ghost" size="sm" onClick={() => setDetailRecord(record)} aria-label="Detail">
                               <Eye className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => openEdit(record)} aria-label="Edit">
-                              <Pencil className="h-4 w-4" />
-                            </Button>
                             <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={() => setDeleteTarget(record)} aria-label="Hapus">
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -392,69 +346,16 @@ export default function ExpensesPage() {
             </DialogContent>
           </Dialog>
 
-          {/* ─── Edit Dialog ───────────────────────────────────────────────── */}
-          <Dialog open={Boolean(editRecord)} onOpenChange={(v) => { if (!v) setEditRecord(null); }}>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Edit Pengeluaran</DialogTitle>
-                <DialogDescription>Perbarui detail pengeluaran.</DialogDescription>
-              </DialogHeader>
-              {editRecord && (
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-ink-muted">Tanggal</Label>
-                    <Input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-ink-muted">Deskripsi</Label>
-                    <Input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} />
-                  </div>
-                  {isAdmin ? (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-ink-muted">Kategori</Label>
-                      <Select value={editCategory} onValueChange={(v) => setEditCategory(v as ExpenseCategory)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {CATEGORIES.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ) : (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-ink-muted">Kategori</Label>
-                      <p className="flex h-10 items-center rounded-md border border-line bg-background px-3 text-sm text-ink">Operasional</p>
-                    </div>
-                  )}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-ink-muted">Jumlah (Rp)</Label>
-                    <Input value={editAmount} onChange={(e) => setEditAmount(formatRupiahInput(e.target.value))} placeholder="Rp60.000" />
-                  </div>
-                  {editError && <p className="text-sm text-brand-dark">{editError}</p>}
-                </div>
-              )}
-              <DialogFooter className="gap-2">
-                <Button variant="outline" onClick={() => setEditRecord(null)}>Batal</Button>
-                <Button onClick={handleEdit} disabled={editSaving}>{editSaving ? 'Menyimpan...' : 'Simpan'}</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          {/* ─── Delete Confirm Dialog ─────────────────────────────────────── */}
-          <Dialog open={Boolean(deleteTarget)} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>
-            <DialogContent className="sm:max-w-sm">
-              <DialogHeader>
-                <DialogTitle>Hapus Pengeluaran</DialogTitle>
-                <DialogDescription>
-                  Yakin ingin menghapus <strong>{deleteTarget?.description}</strong> senilai{' '}
-                  {deleteTarget ? formatRupiah(deleteTarget.amount) : ''}? Tindakan ini tidak dapat dibatalkan.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter className="gap-2">
-                <Button variant="outline" onClick={() => setDeleteTarget(null)}>Batal</Button>
-                <Button variant="destructive" onClick={handleDelete} disabled={deleting}>{deleting ? 'Menghapus...' : 'Hapus'}</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          {/* ─── Delete Confirm Dialog dengan Alasan ───────────────────────── */}
+          <DeleteConfirmDialog
+            open={Boolean(deleteTarget)}
+            onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}
+            title="Hapus Pengeluaran"
+            description={`Yakin ingin menghapus pengeluaran senilai ${deleteTarget ? formatRupiah(deleteTarget.amount) : ''}? Tindakan ini akan dicatat ke dalam audit log.`}
+            itemName={deleteTarget?.description}
+            onConfirm={handleDelete}
+            loading={deleting}
+          />
 
           {/* ─── Create Dialog ─────────────────────────────────────────────── */}
           <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>

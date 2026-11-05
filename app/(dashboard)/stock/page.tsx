@@ -2,13 +2,14 @@
 
 import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
-import { Eye, Pencil, Plus, Search } from 'lucide-react';
+import { Eye, Plus, Search, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { DataState } from '@/components/shared/data-state';
 import { useAuth, useRole } from '@/components/layout/role-context';
 import { Badge } from '@/components/ui/badge';
 import { StockStatusBadge } from '@/components/shared/stock-status-badge';
 import { TablePagination } from '@/components/shared/table-pagination';
+import { DeleteConfirmDialog } from '@/components/shared/delete-confirm-dialog';
 import { usePagination } from '@/hooks/use-pagination';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useSupabaseRealtime } from '@/hooks/use-supabase-realtime';
 import { formatNumber, formatRupiah } from '@/lib/format';
 import type { StockItem, StockItemInput, StockStatus } from '@/types/operations';
-import { fetchStockItems, saveStockItem } from '@/lib/operations-data';
+import { deleteStockItem, fetchStockItems, saveStockItem } from '@/lib/operations-data';
 import { getStockStatus } from '@/lib/stock';
 import { cn } from '@/lib/utils';
 import { useSupabaseQuery } from '@/hooks/use-supabase-query';
@@ -43,7 +44,7 @@ const STATUS_OPTIONS: { value: 'all' | StockStatus; label: string }[] = [
 
 export default function StockPage() {
   const { role } = useRole();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { toast } = useToast();
   const { data: stockData, loading, error: loadError, refresh } = useSupabaseQuery(fetchStockItems);
   useSupabaseRealtime(['stock_items'], refresh);
@@ -55,7 +56,8 @@ export default function StockPage() {
   const [status, setStatus] = useState<'all' | StockStatus>('all');
   const [detailId, setDetailId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
-  const [editTarget, setEditTarget] = useState<StockItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<StockItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const categories = Array.from(new Set(items.map((item) => item.category))).sort();
   const filtered = items.filter((item) => {
@@ -72,13 +74,6 @@ export default function StockPage() {
   const isAdmin = role === 'admin';
 
   const openCreate = () => {
-    setEditTarget(null);
-    setFormOpen(true);
-  };
-
-  const openEdit = (item: StockItem) => {
-    setDetailId(null);
-    setEditTarget(item);
     setFormOpen(true);
   };
 
@@ -87,15 +82,40 @@ export default function StockPage() {
     setSaveError(null);
     try {
       if (!user?.id) throw new Error('Sesi pengguna tidak ditemukan. Silakan login kembali.');
-      await saveStockItem(input, user.id, editTarget?.id);
+      await saveStockItem(input, user.id);
       await refresh();
-      toast({ title: editTarget ? 'Stok & menu diperbarui' : 'Stok & menu ditambahkan', description: input.name });
+      toast({ title: 'Stok & menu ditambahkan', description: input.name });
       setFormOpen(false);
     } catch (cause) {
       setSaveError(cause instanceof Error ? cause.message : 'Gagal menyimpan stok.');
       throw cause;
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async (reason: string) => {
+    if (!deleteTarget || !user?.id) return;
+    setDeleting(true);
+    try {
+      await deleteStockItem(
+        deleteTarget.id,
+        user.id,
+        profile?.name ?? user.fullName ?? 'Pengguna',
+        reason,
+      );
+      await refresh();
+      toast({ title: 'Item stok dihapus', description: deleteTarget.name });
+      setDeleteTarget(null);
+    } catch (cause) {
+      toast({
+        title: 'Gagal menghapus item',
+        description: cause instanceof Error ? cause.message : 'Terjadi kesalahan.',
+        variant: 'destructive',
+      });
+      throw cause;
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -215,9 +235,15 @@ export default function StockPage() {
                             Detail
                           </Button>
                           {isAdmin && (
-                            <Button variant="ghost" size="sm" onClick={() => openEdit(item)} aria-label={`Edit ${item.name}`}>
-                              <Pencil className="h-4 w-4" />
-                              Edit
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                              onClick={() => setDeleteTarget(item)}
+                              aria-label={`Hapus ${item.name}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Hapus
                             </Button>
                           )}
                         </div>
@@ -235,22 +261,27 @@ export default function StockPage() {
 
       <StockDetailSheet
         item={detailItem}
-        canEdit={isAdmin}
         onOpenChange={(open) => !open && setDetailId(null)}
-        onEdit={() => detailItem && openEdit(detailItem)}
       />
 
       {formOpen && (
         <StockFormDialog
-          key={editTarget?.id ?? 'new'}
           open={formOpen}
           onOpenChange={setFormOpen}
-          initial={editTarget}
-          categories={categories}
           onSubmit={handleSave}
           saving={saving}
         />
       )}
+
+      <DeleteConfirmDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Hapus Item Stok & Menu"
+        description="Item stok dan menu ini akan dihapus dari sistem. Mohon cantumkan keterangan alasan penghapusan untuk catatan audit log."
+        itemName={deleteTarget?.name}
+        onConfirm={handleDelete}
+        loading={deleting}
+      />
     </>
   );
 }

@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { formatRupiahInput, parseRupiahInput } from '@/lib/format';
-import type { StockItem, StockItemInput } from '@/types/operations';
+import type { StockItemInput } from '@/types/operations';
 
 type FormState = {
   name: string;
@@ -20,46 +20,39 @@ type FormState = {
   available: boolean;
 };
 
-function toFormState(item: StockItem | null): FormState {
-  if (!item) {
-    return { name: '', category: 'Lainnya', stock: '0', minStock: '0', unit: 'porsi', unitCost: '', price: '', available: true };
-  }
+function initialFormState(): FormState {
   return {
-    name: item.name,
-    category: item.category || 'Lainnya',
-    stock: String(item.stock),
-    minStock: String(item.minStock),
-    unit: item.unit || 'porsi',
-    unitCost: formatRupiahInput(String(item.unitCost)),
-    price: formatRupiahInput(String(item.price)),
-    available: item.available,
+    name: '',
+    category: 'Lainnya',
+    stock: '',     // Dikosongkan agar tidak ada bug angka 0 di depan
+    minStock: '',  // Dikosongkan agar tidak ada bug angka 0 di depan
+    unit: 'porsi',
+    unitCost: '',
+    price: '',
+    available: true,
   };
 }
 
 export function StockFormDialog({
   open,
   onOpenChange,
-  initial,
-  categories,
   onSubmit,
   saving,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  initial: StockItem | null;
-  categories: string[];
   onSubmit: (input: StockItemInput) => Promise<void>;
   saving: boolean;
 }) {
-  const [form, setForm] = useState<FormState>(() => toFormState(initial));
+  const [form, setForm] = useState<FormState>(initialFormState);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
-      setForm(toFormState(initial));
+      setForm(initialFormState());
       setError(null);
     }
-  }, [initial, open]);
+  }, [open]);
 
   const update = (key: keyof FormState) => (event: ChangeEvent<HTMLInputElement>) =>
     setForm((prev) => ({ ...prev, [key]: event.target.value }));
@@ -71,8 +64,8 @@ export function StockFormDialog({
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    const stock = Number(form.stock);
-    const minStock = Number(form.minStock);
+    const stock = form.stock.trim() === '' ? 0 : Number(form.stock);
+    const minStock = form.minStock.trim() === '' ? 0 : Number(form.minStock);
     const unitCost = parseRupiahInput(form.unitCost);
     const price = parseRupiahInput(form.price);
 
@@ -97,7 +90,7 @@ export function StockFormDialog({
         available: form.available,
       });
     } catch {
-      // The parent displays the Supabase error and keeps the dialog open.
+      // Parent displays the error toast/message
     }
   };
 
@@ -105,7 +98,7 @@ export function StockFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{initial ? 'Edit Stok & Menu' : 'Tambah Stok & Menu'}</DialogTitle>
+          <DialogTitle>Tambah Stok & Menu</DialogTitle>
           <DialogDescription>
             Satu bungkus = satu porsi menu. Isi stok sekaligus menentukan menu yang dijual.
           </DialogDescription>
@@ -123,10 +116,10 @@ export function StockFormDialog({
               <Input value={form.price} onChange={updateCurrency('price')} placeholder="Rp25.000" />
             </Field>
             <Field label="Stok gudang">
-              <Input type="number" min={0} step="any" value={form.stock} onChange={update('stock')} />
+              <Input type="number" min={0} step="any" value={form.stock} onChange={update('stock')} placeholder="0" />
             </Field>
             <Field label="Minimum stok outlet">
-              <Input type="number" min={0} step="any" value={form.minStock} onChange={update('minStock')} />
+              <Input type="number" min={0} step="any" value={form.minStock} onChange={update('minStock')} placeholder="0" />
             </Field>
           </div>
 
