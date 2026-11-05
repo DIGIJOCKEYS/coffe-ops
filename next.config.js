@@ -8,8 +8,15 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', 'date-fns'],
   },
-  // Disable static export - required when using Clerk auth
-  output: undefined,
+  // Proxy Clerk requests for *.vercel.app (no custom subdomain support)
+  async rewrites() {
+    return [
+      {
+        source: '/__clerk/:path*',
+        destination: 'https://clerk.nestation-ops.vercel.app/:path*',
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;
