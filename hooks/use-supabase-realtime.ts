@@ -16,7 +16,7 @@ export function useSupabaseRealtime(
     if (!enabled || !tableKey) return;
 
     // Pass Clerk token ke Supabase realtime untuk RLS
-    const supabase = createClient(session ? () => session.getToken() : undefined);
+    const supabase = createClient(session);
     let channel = supabase.channel(`live:${tableKey}`);
     for (const table of tableKey.split(',')) {
       channel = channel.on(

@@ -4,19 +4,18 @@ import { auth } from '@clerk/nextjs/server';
 /**
  * Buat Supabase client untuk Server Components / Route Handlers.
  *
- * Cara baru (sejak April 2025):
+ * Sesuai dokumentasi Clerk + Supabase integration (April 2025):
  * - Gunakan Clerk `auth()` untuk mendapatkan token server-side
- * - Pass token ke Supabase via `accessToken`
- * - Tidak perlu @supabase/ssr cookie handling untuk autentikasi
+ * - Pass token ke Supabase via `accessToken` callback
  */
-export async function createClient() {
-  const { getToken } = await auth();
-
+export async function createServerSupabaseClient() {
   return createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      accessToken: () => getToken(),
+      async accessToken() {
+        return (await auth()).getToken();
+      },
     },
   );
 }

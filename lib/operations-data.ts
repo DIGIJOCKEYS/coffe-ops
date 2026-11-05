@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
+import type { Session } from '@clerk/nextjs/server';
 import type {
   AuditEntry,
   DailySales,
@@ -16,24 +17,20 @@ import type {
   UserProfile,
 } from '@/types/operations';
 
-// Type untuk token getter — bisa dari useSession().session.getToken
-type TokenGetter = () => Promise<string | null> | string | null;
-
-// Singleton sederhana: simpan token getter yang di-set dari component
-let _getToken: TokenGetter | undefined;
+// Singleton: simpan Clerk session dari AuthProvider
+let _session: Session | null | undefined;
 
 /**
- * Daftarkan token getter dari Clerk session.
- * Panggil ini sekali dari AuthProvider atau provider teratas.
- * Contoh: setSupabaseTokenGetter(() => session.getToken())
+ * Daftarkan Clerk session dari AuthProvider.
+ * Panggil ini dari useEffect di AuthProvider ketika session berubah.
  */
-export function setSupabaseTokenGetter(getter: TokenGetter | undefined) {
-  _getToken = getter;
+export function setClerkSession(session: Session | null | undefined) {
+  _session = session;
 }
 
 /** Buat Supabase client dengan Clerk token jika tersedia */
 function getSupabaseClient() {
-  return createClient(_getToken);
+  return createClient(_session);
 }
 
 const DATE_FORMAT = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' });

@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useUser, useClerk, useSession } from '@clerk/nextjs';
 import { createClient } from '@/lib/supabase/client';
-import { setSupabaseTokenGetter } from '@/lib/operations-data';
+import { setClerkSession } from '@/lib/operations-data';
 import { useSupabaseRealtime } from '@/hooks/use-supabase-realtime';
 import type { Role } from '@/lib/nav-config';
 
@@ -30,14 +30,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { session } = useSession();
   const userId = user?.id;
 
-  // Register token getter ke operations-data agar semua Supabase calls
+  // Register Clerk session ke operations-data agar semua Supabase calls
   // otomatis menyertakan Clerk session token untuk RLS
   useEffect(() => {
-    if (session) {
-      setSupabaseTokenGetter(() => session.getToken());
-    } else {
-      setSupabaseTokenGetter(undefined);
-    }
+    setClerkSession(session);
   }, [session]);
   const fullName = user?.fullName;
   const firstName = user?.firstName;
@@ -68,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const email = emailAddress || '';
 
       try {
-        const supabase = createClient(session ? () => session.getToken() : undefined);
+        const supabase = createClient(session);
         const { data, error } = await supabase
           .from('profiles')
           .select('id, name, role, is_active')

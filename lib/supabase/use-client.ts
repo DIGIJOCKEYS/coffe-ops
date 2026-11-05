@@ -15,7 +15,5 @@ import { createClient } from './client';
  */
 export function useSupabaseClient() {
   const { session } = useSession();
-  return createClient(
-    session ? () => session.getToken() : undefined,
-  );
+  return createClient(session);
 }

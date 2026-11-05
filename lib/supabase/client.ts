@@ -1,27 +1,23 @@
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import type { Session } from '@clerk/nextjs/server';
 
 /**
- * Buat Supabase client untuk Client Components.
+ * Buat Supabase client untuk Client Components dengan Clerk auth.
  *
- * Cara baru (sejak April 2025):
- * - Daftarkan Clerk sebagai Third-Party Auth Provider di Supabase Dashboard
- * - Pass Clerk session token via `accessToken` callback
- * - Tidak perlu JWT template, tidak perlu getToken({ template: 'supabase' })
+ * Sesuai dokumentasi Clerk + Supabase integration (April 2025):
+ * - Clerk harus didaftarkan sebagai Third-Party Auth Provider di Supabase Dashboard
+ * - Session token dari Clerk otomatis dikirim ke Supabase untuk RLS
  *
- * @param getToken - Fungsi untuk mendapatkan Clerk session token.
- *   Dapatkan dari `useSession()` hook: `session?.getToken()`
+ * @param session - Clerk session dari useSession() hook
  */
-export function createClient(getToken?: () => Promise<string | null> | string | null) {
+export function createClient(session?: Session | null) {
   return createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      accessToken: getToken
-        ? async () => {
-            const token = await getToken();
-            return token ?? null;
-          }
-        : undefined,
+      async accessToken() {
+        return session?.getToken() ?? null;
+      },
     },
   );
 }
