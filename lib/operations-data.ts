@@ -16,6 +16,26 @@ import type {
   UserProfile,
 } from '@/types/operations';
 
+// Type untuk token getter — bisa dari useSession().session.getToken
+type TokenGetter = () => Promise<string | null> | string | null;
+
+// Singleton sederhana: simpan token getter yang di-set dari component
+let _getToken: TokenGetter | undefined;
+
+/**
+ * Daftarkan token getter dari Clerk session.
+ * Panggil ini sekali dari AuthProvider atau provider teratas.
+ * Contoh: setSupabaseTokenGetter(() => session.getToken())
+ */
+export function setSupabaseTokenGetter(getter: TokenGetter | undefined) {
+  _getToken = getter;
+}
+
+/** Buat Supabase client dengan Clerk token jika tersedia */
+function getSupabaseClient() {
+  return createClient(_getToken);
+}
+
 const DATE_FORMAT = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' });
 const AUDIT_TIME_FORMAT = new Intl.DateTimeFormat('id-ID', {
   day: '2-digit',
@@ -59,7 +79,7 @@ function dateKey(date: Date): string {
 }
 
 export async function fetchStockItems(): Promise<StockItem[]> {
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
   const rows = await selectAll((from, to) => supabase.from('stock_items').select('*').order('name').range(from, to));
   return rows.map((row) => ({
     id: row.id,
@@ -76,7 +96,7 @@ export async function fetchStockItems(): Promise<StockItem[]> {
 }
 
 export async function fetchSaleMenus(): Promise<SaleMenu[]> {
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
   const rows = await selectAll((from, to) =>
     supabase.from('stock_items').select('id, name, price, available').order('name').range(from, to),
   );
@@ -97,7 +117,7 @@ export type StockMutationItem = {
 };
 
 export async function fetchStockItemNames(): Promise<StockMutationItem[]> {
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
   const rows = await selectAll((from, to) =>
     supabase.from('stock_items').select('id, name, unit').order('name').range(from, to),
   );
@@ -109,7 +129,7 @@ export async function saveStockItem(
   userId: string,
   id?: string,
 ): Promise<StockItem> {
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
   const result = await supabase.rpc('save_stock_item_with_expense', {
     p_item_id: id ?? null,
     p_name: input.name,
@@ -153,7 +173,7 @@ export async function fetchExpensesPage(
   fromDate: string,
   toDate: string,
 ): Promise<ExpensesPage> {
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
   let query = supabase
     .from('expenses')
     .select('id, date, description, category, amount, created_by, created_at, has_photo, photo_thumbnail, profiles:profiles!expenses_created_by_fkey (id, name, role)')
@@ -211,7 +231,7 @@ export async function fetchExpensesPage(
 }
 
 export async function fetchExpenses(): Promise<Expense[]> {
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
   const rows = await selectAll((from, to) =>
     supabase
       .from('expenses')
@@ -246,7 +266,7 @@ export async function fetchExpenses(): Promise<Expense[]> {
 }
 
 export async function fetchExpensePhoto(expenseId: string): Promise<string | undefined> {
-  const { data, error } = await createClient()
+  const { data, error } = await getSupabaseClient()
     .from('expenses')
     .select('photo')
     .eq('id', expenseId)
@@ -256,7 +276,7 @@ export async function fetchExpensePhoto(expenseId: string): Promise<string | und
 }
 
 export async function fetchExpensePhotoPreview(expenseId: string): Promise<string | undefined> {
-  const { data, error } = await createClient()
+  const { data, error } = await getSupabaseClient()
     .from('expenses')
     .select('photo_thumbnail, photo')
     .eq('id', expenseId)
@@ -270,7 +290,7 @@ export async function createExpense(
   userId: string,
   userName: string,
 ): Promise<void> {
-  const { data, error } = await createClient()
+  const { data, error } = await getSupabaseClient()
     .from('expenses')
     .insert({
       date: input.date,
@@ -294,7 +314,7 @@ export async function fetchStockTakes(
   userId?: string,
   userRole?: 'admin' | 'staff',
 ): Promise<StockTake[]> {
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
   const rows = await selectAll((from, to) => {
     let query = supabase
       .from('stock_takes')
@@ -326,7 +346,7 @@ export async function fetchStockTakes(
 }
 
 export async function fetchStockTakePhoto(stockTakeId: string): Promise<string | undefined> {
-  const { data, error } = await createClient()
+  const { data, error } = await getSupabaseClient()
     .from('stock_takes')
     .select('photo')
     .eq('id', stockTakeId)
@@ -336,7 +356,7 @@ export async function fetchStockTakePhoto(stockTakeId: string): Promise<string |
 }
 
 export async function fetchStockTakePhotoPreview(stockTakeId: string): Promise<string | undefined> {
-  const { data, error } = await createClient()
+  const { data, error } = await getSupabaseClient()
     .from('stock_takes')
     .select('photo_thumbnail, photo')
     .eq('id', stockTakeId)
@@ -349,7 +369,7 @@ export async function createStockTake(
   input: Omit<StockTake, 'id' | 'datetime'>,
   userId: string,
 ): Promise<void> {
-  const { error } = await createClient().rpc('record_stock_movement', {
+  const { error } = await getSupabaseClient().rpc('record_stock_movement', {
     p_item_id: input.itemId,
     p_qty: input.qty,
     p_kind: input.kind,
@@ -369,7 +389,7 @@ export async function saveStockCounts(
   userName: string,
   location: 'warehouse' | 'outlet' = 'warehouse',
 ): Promise<void> {
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
   for (const item of updates) {
     if (item.before === item.after) continue;
     const { data, error } = await supabase
@@ -388,7 +408,7 @@ export async function saveStockCounts(
 }
 
 export async function fetchShiftSales(fromDate?: string, toDate?: string): Promise<ShiftSales[]> {
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
   const sales = await selectAll((from, to) => {
     let query = supabase
       .from('shift_sales')
@@ -457,7 +477,7 @@ export async function createShiftSale(input: {
   lines: SalesLine[];
   userId: string;
 }): Promise<number> {
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
   const { data, error } = await supabase.rpc('record_shift_sale', {
     p_date: input.date,
     p_shift: input.shift,
@@ -478,7 +498,7 @@ export async function fetchAuditEntries(
   fromDate?: string,
   toDate?: string,
 ): Promise<AuditEntry[]> {
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
   const queryPage = (from: number, to: number) => {
     let query = supabase
       .from('audit_entries')
@@ -520,7 +540,7 @@ export function fetchRecentAuditEntries(): Promise<AuditEntry[]> {
 }
 
 export async function fetchUserProfiles(): Promise<UserProfile[]> {
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
   const rows = await selectAll((from, to) =>
     supabase
       .from('profiles')
@@ -543,7 +563,7 @@ export async function setUserActiveStatus(
   targetId: string,
   isActive: boolean,
 ): Promise<void> {
-  const { error } = await createClient().rpc('set_profile_active', {
+  const { error } = await getSupabaseClient().rpc('set_profile_active', {
     p_actor_id: actorId,
     p_target_id: targetId,
     p_is_active: isActive,
@@ -564,7 +584,7 @@ const NOTIFICATION_ROUTES: Record<string, string> = {
 };
 
 export async function fetchNotifications(userId: string): Promise<NotificationItem[]> {
-  const { data, error } = await createClient().rpc('get_notifications', {
+  const { data, error } = await getSupabaseClient().rpc('get_notifications', {
     p_user_id: userId,
     p_limit: 10,
   });
@@ -590,7 +610,7 @@ export async function fetchNotifications(userId: string): Promise<NotificationIt
 }
 
 export async function fetchUnreadNotificationCount(userId: string): Promise<number> {
-  const { data, error } = await createClient().rpc('get_unread_notification_count', {
+  const { data, error } = await getSupabaseClient().rpc('get_unread_notification_count', {
     p_user_id: userId,
   });
   throwIfError(error);
@@ -598,7 +618,7 @@ export async function fetchUnreadNotificationCount(userId: string): Promise<numb
 }
 
 export async function markNotificationRead(userId: string, entryId: string): Promise<void> {
-  const { error } = await createClient().rpc('mark_notification_read', {
+  const { error } = await getSupabaseClient().rpc('mark_notification_read', {
     p_user_id: userId,
     p_audit_entry_id: entryId,
   });
@@ -606,7 +626,7 @@ export async function markNotificationRead(userId: string, entryId: string): Pro
 }
 
 export async function markAllNotificationsRead(userId: string): Promise<void> {
-  const { error } = await createClient().rpc('mark_all_notifications_read', {
+  const { error } = await getSupabaseClient().rpc('mark_all_notifications_read', {
     p_user_id: userId,
   });
   throwIfError(error);
@@ -619,7 +639,7 @@ async function addAudit(
   module: string,
   details: Record<string, string> = {},
 ): Promise<void> {
-  const { error } = await createClient().from('audit_entries').insert({
+  const { error } = await getSupabaseClient().from('audit_entries').insert({
     user_id: userId,
     user_name: userName,
     action,
@@ -633,7 +653,7 @@ export async function fetchDailySales(days = 7, throughDate = todayJakarta()): P
   const [year, month, day] = throughDate.split('-').map(Number);
   const start = new Date(Date.UTC(year, month - 1, day - (days - 1)));
   const from = dateKey(start);
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
   const data = await selectAll((pageFrom, pageTo) =>
     supabase.from('shift_sales').select('date, total').gte('date', from).lte('date', throughDate).range(pageFrom, pageTo),
   );
@@ -650,7 +670,7 @@ export async function fetchDailySales(days = 7, throughDate = todayJakarta()): P
 export async function fetchMonthlySales(monthCount = 6, throughDate = todayJakarta()): Promise<MonthlySales[]> {
   const [year, month] = throughDate.split('-').map(Number);
   const start = new Date(Date.UTC(year, month - monthCount, 1));
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
   const data = await selectAll((from, to) =>
     supabase.from('shift_sales').select('date, total').gte('date', dateKey(start)).lte('date', throughDate).range(from, to),
   );
@@ -672,7 +692,7 @@ export async function fetchTodayExpenses(
   userId?: string,
   userRole?: 'admin' | 'staff',
 ): Promise<Expense[]> {
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
   const rows = await selectAll((from, to) => {
     let query = supabase.from('expenses').select('id, date, description, category, amount').eq('date', date);
     if (userRole === 'staff' && userId) {
@@ -697,7 +717,7 @@ export type DashboardInventorySnapshot = {
 };
 
 export async function fetchInventorySnapshot(date: string): Promise<DashboardInventorySnapshot[]> {
-  const { data, error } = await createClient().rpc('get_inventory_snapshot', { p_date: date });
+  const { data, error } = await getSupabaseClient().rpc('get_inventory_snapshot', { p_date: date });
   throwIfError(error);
   return ((data ?? []) as DashboardInventorySnapshot[]).map((snapshot) => ({
     ...snapshot,
@@ -752,7 +772,7 @@ export function formatAuditTime(value: string): string {
 // ─── DELETE / UPDATE SHIFT SALE ──────────────────────────────────────────────
 
 export async function deleteShiftSale(saleId: string, userId: string, userName: string): Promise<void> {
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
   // Fetch sale info for audit first
   const { data: saleRow, error: fetchErr } = await supabase
     .from('shift_sales')
@@ -808,7 +828,7 @@ export async function updateShiftSale(
   userId: string,
   userName: string,
 ): Promise<number> {
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
   // Recalculate total
   const total = input.lines.reduce((sum, l) => sum + l.qty * l.price, 0);
 
@@ -880,7 +900,7 @@ export async function updateShiftSale(
 // ─── DELETE / UPDATE EXPENSE ─────────────────────────────────────────────────
 
 export async function deleteExpense(expenseId: string, userId: string, userName: string): Promise<void> {
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
   const { data: row, error: fetchErr } = await supabase
     .from('expenses')
     .select('description, amount')
@@ -902,7 +922,7 @@ export async function updateExpense(
   userId: string,
   userName: string,
 ): Promise<void> {
-  const { error } = await createClient()
+  const { error } = await getSupabaseClient()
     .from('expenses')
     .update({ date: input.date, description: input.description, category: input.category, amount: input.amount })
     .eq('id', expenseId);
@@ -913,7 +933,7 @@ export async function updateExpense(
 // ─── DELETE / UPDATE STOCK TAKE (MUTASI STOK) ────────────────────────────────
 
 export async function deleteStockTake(takeId: string, userId: string, userName: string): Promise<void> {
-  const supabase = createClient();
+  const supabase = getSupabaseClient();
   const { data: row, error: fetchErr } = await supabase
     .from('stock_takes')
     .select('item_id, item_name, qty, kind')
@@ -957,7 +977,7 @@ export async function updateStockTake(
   userId: string,
   userName: string,
 ): Promise<void> {
-  const { error } = await createClient()
+  const { error } = await getSupabaseClient()
     .from('stock_takes')
     .update({ qty: input.qty, reason: input.reason ?? null, notes: input.notes ?? null })
     .eq('id', takeId);

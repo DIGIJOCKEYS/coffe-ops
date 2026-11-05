@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useSession } from '@clerk/nextjs';
 import { createClient } from '@/lib/supabase/client';
 
 export function useSupabaseRealtime(
@@ -8,12 +9,14 @@ export function useSupabaseRealtime(
   onChange: () => void,
   enabled = true,
 ) {
+  const { session } = useSession();
   const tableKey = tables.join(',');
 
   useEffect(() => {
     if (!enabled || !tableKey) return;
 
-    const supabase = createClient();
+    // Pass Clerk token ke Supabase realtime untuk RLS
+    const supabase = createClient(session ? () => session.getToken() : undefined);
     let channel = supabase.channel(`live:${tableKey}`);
     for (const table of tableKey.split(',')) {
       channel = channel.on(
@@ -27,5 +30,5 @@ export function useSupabaseRealtime(
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [enabled, onChange, tableKey]);
+  }, [enabled, onChange, tableKey, session]);
 }
