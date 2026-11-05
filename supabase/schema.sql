@@ -882,6 +882,20 @@ create policy "business_settings_access" on public.business_settings
 
 insert into public.business_settings (business_name) values ('Nestation');
 
+-- Grant akses tabel ke anon dan authenticated role
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.profiles TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.stock_items TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.shift_sales TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.sales_lines TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.expenses TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.expense_totals TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.stock_takes TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.audit_entries TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.audit_entry_reads TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.daily_inventory_snapshots TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.business_settings TO anon, authenticated;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
+
 -- ============================================================
 -- SUPABASE STORAGE - bucket untuk aset bisnis
 -- ============================================================
